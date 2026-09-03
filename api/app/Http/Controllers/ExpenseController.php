@@ -1,0 +1,120 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Enums\ExpenseStatus;
+use App\Http\Requests\StoreExpenseRequest;
+use App\Http\Requests\UpdateExpenseStatusRequest;
+use App\Http\Resources\ExpenseResource;
+use App\Models\Business;
+use App\Models\Expense;
+use App\Services\AuditService;
+use App\Support\AuthorizesBusinessActions;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\ValidationException;
+
+class ExpenseController extends Controller
+{
+    use AuthorizesBusinessActions;
+
+    public function __construct(private readonly AuditService $audit)
+    {
+    }
+
+    public function index(Request $request, Business $business): AnonymousResourceCollection
+    {
+        $this->requirePermission($request, 'expenses.manage');
+
+        $expenses = $business->expenses()
+            ->with(['submitter:id,name', 'approver:id,name'])
+            ->when($request->filled('search'), function ($query) use ($request): void {
+                $search = trim((string) $request->query('search'));
+                $query->where(function ($nested) use ($search): void {
+                    $nested->where('category', 'like', "%{$search}%")
+                        ->orWhere('vendor', 'like', "%{$search}%")
+                        ->orWhere('reference', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->filled('status') && $request->query('status') !== 'all', fn ($query) => $query->where('status', $request->query('status')))
+            ->latest('expense_date')
+            ->latest('id')
+            ->paginate((int) $request->query('per_page', 20));
+
+        return ExpenseResource::collection($expenses);
+    }
+
+    public function store(StoreExpenseRequest $request, Business $business): JsonResponse
+    {
+        $membership = $this->requirePermission($request, 'expenses.manage');
+        $data = $request->validated();
+
+        if ($business->isDateClosed($data['expense_date'])) {
+            throw ValidationException::withMessages(['expense_date' => 'This date belongs to a closed profit period.']);
+        }
+
+        $canApprove = $membership->allows('expenses.approve');
+        $expense = $business->expenses()->create([
+            ...$data,
+            'submitted_by' => $request->user()->id,
+            'tax_amount' => $data['tax_amount'] ?? 0,
+            'status' => $canApprove ? ExpenseStatus::Approved : ExpenseStatus::Pending,
+            'approved_by' => $canApprove ? $request->user()->id : null,
+            'approved_at' => $canApprove ? now() : null,
+        ]);
+
+        $this->audit->record($request->user(), $business, 'expense.created', $expense, null, $expense->toArray(), $request);
+
+        return response()->json([
+            'message' => 'Expense recorded.',
+            'expense' => new ExpenseResource($expense->fresh(['submitter', 'approver'])),
+        ], 201);
+    }
+
+    public function updateStatus(UpdateExpenseStatusRequest $request, Business $business, Expense $expense): JsonResponse
+    {
+        $this->requirePermission($request, 'expenses.approve');
+        $this->assertBusiness($business, $expense);
+
+        if ($business->isDateClosed($expense->expense_date)) {
+            throw ValidationException::withMessages(['status' => 'This expense belongs to a closed profit period.']);
+        }
+
+        $before = $expense->toArray();
+        $status = ExpenseStatus::from($request->validated('status'));
+        $expense->update([
+            'status' => $status,
+            'approved_by' => $request->user()->id,
+            'approved_at' => now(),
+        ]);
+
+        $this->audit->record($request->user(), $business, 'expense.'.$status->value, $expense, $before, $expense->fresh()->toArray(), $request);
+
+        return response()->json([
+            'message' => $status === ExpenseStatus::Approved ? 'Expense approved.' : 'Expense rejected.',
+            'expense' => new ExpenseResource($expense->fresh(['submitter', 'approver'])),
+        ]);
+    }
+
+    public function destroy(Request $request, Business $business, Expense $expense): JsonResponse
+    {
+        $this->requirePermission($request, 'expenses.manage');
+        $this->assertBusiness($business, $expense);
+
+        if ($business->isDateClosed($expense->expense_date)) {
+            throw ValidationException::withMessages(['expense' => 'This expense belongs to a closed profit period.']);
+        }
+
+        $before = $expense->toArray();
+        $expense->delete();
+        $this->audit->record($request->user(), $business, 'expense.deleted', $expense, $before, null, $request);
+
+        return response()->json(['message' => 'Expense deleted.']);
+    }
+
+    private function assertBusiness(Business $business, Expense $expense): void
+    {
+        abort_unless($expense->business_id === $business->id, 404);
+    }
+}

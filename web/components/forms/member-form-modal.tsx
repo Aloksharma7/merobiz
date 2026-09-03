@@ -1,0 +1,43 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { FieldShell, Input, Select } from "@/components/ui/fields";
+import { Modal } from "@/components/ui/modal";
+import { api, apiError, fieldErrors } from "@/lib/api";
+import type { ApiMessage, BusinessRole, Member } from "@/lib/types";
+import { humanize } from "@/lib/utils";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+const blank = { name: "", email: "", phone: "", password: "", role: "employee" as BusinessRole, title: "", commission_rate: "0" };
+export function MemberFormModal({ businessId, actorRole, open, onClose }: { businessId: string | number; actorRole: BusinessRole; open: boolean; onClose: () => void }) {
+  const roles: BusinessRole[] = actorRole === "owner" ? ["employee", "admin", "owner"] : ["employee", "admin"];
+  const [form, setForm] = useState(blank);
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const queryClient = useQueryClient();
+  useEffect(() => { if (open) { setForm(blank); setErrors({}); } }, [open]);
+
+  const mutation = useMutation({
+    mutationFn: async () => (await api.post<ApiMessage<{ member: Member }>>(`/businesses/${businessId}/team`, { ...form, commission_rate: Number(form.commission_rate || 0) })).data,
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["team", String(businessId)] }); toast.success("Team member added", { description: "Their access follows the selected role." }); onClose(); },
+    onError: (error) => { setErrors(fieldErrors(error)); toast.error("Could not add team member", { description: apiError(error) }); },
+  });
+
+  function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) { setForm((current) => ({ ...current, [key]: value })); }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add team member" description="Use an existing account email or set a temporary password for a new user." footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="member-form" loading={mutation.isPending}>Add member</Button></>} size="lg">
+      <form id="member-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="grid gap-4 sm:grid-cols-2">
+        <FieldShell label="Full name" htmlFor="member-name" error={errors.name?.[0]} required><Input id="member-name" value={form.name} onChange={(event) => update("name", event.target.value)} autoFocus required /></FieldShell>
+        <FieldShell label="Email" htmlFor="member-email" error={errors.email?.[0]} required><Input id="member-email" type="email" value={form.email} onChange={(event) => update("email", event.target.value)} required /></FieldShell>
+        <FieldShell label="Phone" htmlFor="member-phone" error={errors.phone?.[0]}><Input id="member-phone" value={form.phone} onChange={(event) => update("phone", event.target.value)} /></FieldShell>
+        <FieldShell label="Temporary password" htmlFor="member-password" error={errors.password?.[0]} hint="For new users: at least 8 characters with letters and numbers"><Input id="member-password" type="password" minLength={8} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder="Letters and numbers" /></FieldShell>
+        <FieldShell label="Role" htmlFor="member-role" error={errors.role?.[0]} required><Select id="member-role" value={form.role} onChange={(event) => update("role", event.target.value as BusinessRole)}>{roles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</Select></FieldShell>
+        <FieldShell label="Job title" htmlFor="member-title" error={errors.title?.[0]}><Input id="member-title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Sales Executive" /></FieldShell>
+        <FieldShell label="Sales commission" htmlFor="commission-rate" error={errors.commission_rate?.[0]} hint="% of net sales"><Input id="commission-rate" type="number" min="0" max="100" step="0.0001" value={form.commission_rate} onChange={(event) => update("commission_rate", event.target.value)} /></FieldShell>
+        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4 text-xs leading-5 text-[var(--ink-soft)]"><span className="font-bold text-[var(--ink)]">Simple rule:</span> employees see only the business they are assigned to and their own sales workflow; admins manage that business.</div>
+      </form>
+    </Modal>
+  );
+}

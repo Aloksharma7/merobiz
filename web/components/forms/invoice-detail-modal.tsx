@@ -1,0 +1,74 @@
+"use client";
+
+import { PaymentFormModal } from "@/components/forms/payment-form-modal";
+import { Badge, statusTone } from "@/components/ui/badge";
+import { Button, LinkButton } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { api, apiError } from "@/lib/api";
+import type { ApiMessage, Business, Invoice } from "@/lib/types";
+import { humanize, money, prettyDate } from "@/lib/utils";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Banknote, Ban, FileCheck2, Printer, ReceiptText } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+
+export function InvoiceDetailModal({ business, invoice, open, onClose }: { business: Business; invoice: Invoice | null; open: boolean; onClose: () => void }) {
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const canManageAllSales = business.permissions.includes("*") || business.permissions.includes("sales.manage");
+  const canCreateOwnSales = business.permissions.includes("sales.create");
+  const canManageThisSale = canManageAllSales || canCreateOwnSales;
+  const canRecordPayment = business.permissions.includes("*") || business.permissions.includes("payments.manage") || business.permissions.includes("payments.record_own");
+
+  const actionMutation = useMutation({
+    mutationFn: async (action: "issue" | "cancel") => (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${business.id}/invoices/${invoice?.id}/${action}`)).data,
+    onSuccess: async (_response, action) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["business-dashboard", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["portfolio-dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["team", String(business.id)] }),
+      ]);
+      toast.success(action === "issue" ? "Invoice issued" : "Invoice cancelled");
+      onClose();
+    },
+    onError: (error) => toast.error("Could not update sale", { description: apiError(error) }),
+  });
+
+  if (!invoice) return null;
+
+  return (
+    <>
+      <Modal open={open} onClose={onClose} title={invoice.invoice_number} description={`${prettyDate(invoice.invoice_date)} · ${invoice.customer_name || invoice.customer?.name || "Walk-in customer"}`} size="lg" footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+          {invoice.status === "draft" && canManageThisSale ? <Button variant="secondary" leftIcon={<FileCheck2 size={16} />} onClick={() => actionMutation.mutate("issue")} loading={actionMutation.isPending}>Issue</Button> : null}
+          {!(invoice.status === "draft" || ["cancelled", "refunded"].includes(invoice.status)) && invoice.paid_amount === 0 && canManageThisSale ? <Button variant="secondary" leftIcon={<Ban size={16} />} onClick={() => actionMutation.mutate("cancel")} loading={actionMutation.isPending}>Cancel</Button> : null}
+          {invoice.balance_amount > 0 && !(["draft", "cancelled", "refunded"].includes(invoice.status)) && canRecordPayment ? <Button leftIcon={<Banknote size={16} />} onClick={() => setPaymentOpen(true)}>Record payment</Button> : null}
+        </>
+      }>
+        <div className="space-y-6">
+          <div className="rounded-2xl bg-[var(--surface-soft)] p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Invoice status</p>
+            <div className="mt-2"><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></div>
+            <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">Sales are recorded immediately when entered. No approval step is required.</p>
+          </div>
+
+          <div className="flex justify-end"><LinkButton href={`/print/invoices/${business.id}/${invoice.id}`} target="_blank" variant="secondary" size="sm" leftIcon={<Printer size={15} />}>Print or PDF</LinkButton></div>
+
+          <div className="overflow-hidden rounded-2xl border border-[var(--line)]"><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-4 py-3 font-bold">Description</th><th className="px-3 py-3 text-right font-bold">Qty</th><th className="px-3 py-3 text-right font-bold">Rate</th><th className="px-3 py-3 text-right font-bold">Tax</th><th className="px-4 py-3 text-right font-bold">Total</th></tr></thead><tbody className="divide-y divide-[var(--line)]">{invoice.items?.map((item) => <tr key={item.id}><td className="px-4 py-3.5 font-semibold">{item.description}</td><td className="px-3 py-3.5 text-right">{item.quantity}</td><td className="px-3 py-3.5 text-right">{money(item.unit_price, business.currency)}</td><td className="px-3 py-3.5 text-right">{item.tax_rate}%</td><td className="px-4 py-3.5 text-right font-bold">{money(item.line_total, business.currency)}</td></tr>)}</tbody></table></div></div>
+
+          <div className="ml-auto max-w-sm space-y-2 rounded-2xl bg-[var(--brand-deep)] p-5 text-sm text-white"><Line label="Subtotal" value={money(invoice.subtotal, business.currency)} /><Line label="Discount" value={`− ${money(invoice.discount_amount, business.currency)}`} /><Line label="Tax" value={money(invoice.tax_amount, business.currency)} /><div className="border-t border-white/12 pt-2"><Line label="Invoice total" value={money(invoice.total_amount, business.currency)} strong /></div><Line label="Paid" value={money(invoice.paid_amount, business.currency)} /><div className="border-t border-white/12 pt-2"><Line label="Balance" value={money(invoice.balance_amount, business.currency)} strong /></div></div>
+
+          {invoice.payments?.length ? <div><h3 className="mb-3 font-extrabold">Payment history</h3><div className="space-y-2">{invoice.payments.map((payment) => <div key={payment.id} className="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><ReceiptText size={16} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold">{payment.payment_number}</p><p className="text-xs text-[var(--ink-soft)]">{prettyDate(payment.payment_date)} · {humanize(payment.method)}</p></div><p className="font-black">{money(payment.amount, business.currency)}</p></div>)}</div></div> : null}
+          {invoice.notes ? <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4"><p className="text-xs font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Notes</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6">{invoice.notes}</p></div> : null}
+        </div>
+      </Modal>
+      <PaymentFormModal businessId={business.id} invoice={invoice} open={paymentOpen} onClose={() => { setPaymentOpen(false); onClose(); }} currency={business.currency} />
+    </>
+  );
+}
+
+function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return <div className="flex items-center justify-between gap-4"><span className={strong ? "font-bold" : "text-white/60"}>{label}</span><span className={strong ? "text-base font-black" : "font-semibold"}>{value}</span></div>;
+}
