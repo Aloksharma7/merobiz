@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { FieldShell, Input } from "@/components/ui/fields";
+import { FieldShell, Input, PasswordInput } from "@/components/ui/fields";
 import { useAuth } from "@/lib/auth-context";
 import { LockKeyhole, Mail } from "lucide-react";
 import Link from "next/link";
@@ -10,7 +10,7 @@ import { useState, type FormEvent } from "react";
 export default function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("password");
+  const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
 
@@ -34,10 +34,10 @@ export default function LoginPage() {
 
       <form onSubmit={submit} className="mt-8 space-y-5">
         <FieldShell label="Email address" htmlFor="email" required>
-          <div className="relative"><Mail size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" /><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="pl-10" /></div>
+          <div className="relative"><Mail size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" /><Input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" className="pl-10" /></div>
         </FieldShell>
         <FieldShell label="Password" htmlFor="password" required>
-          <div className="relative"><LockKeyhole size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" /><Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} className="pl-10" /></div>
+          <div className="relative"><LockKeyhole size={17} className="pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2 text-[var(--ink-soft)]" /><PasswordInput id="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" className="pl-10" /></div>
         </FieldShell>
         <label className="flex items-center gap-2.5 text-sm font-medium text-[var(--ink-soft)]">
           <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="h-4 w-4 rounded border-[var(--line-strong)] accent-[var(--brand)]" />

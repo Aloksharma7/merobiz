@@ -16,9 +16,7 @@ class ProfitPeriodController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly ProfitClosingService $closing)
-    {
-    }
+    public function __construct(private readonly ProfitClosingService $closing) {}
 
     public function index(Request $request, Business $business): AnonymousResourceCollection
     {

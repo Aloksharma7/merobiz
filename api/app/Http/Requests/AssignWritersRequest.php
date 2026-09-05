@@ -1,0 +1,24 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class AssignWritersRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /** @return array<string, mixed> */
+    public function rules(): array
+    {
+        return [
+            'writer_ids' => ['required', 'array', 'min:1'],
+            'writer_ids.*' => ['integer'],
+            'date' => ['required', 'date'],
+            'notes' => ['nullable', 'string', 'max:255'],
+        ];
+    }
+}

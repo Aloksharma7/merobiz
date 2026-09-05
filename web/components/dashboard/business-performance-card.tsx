@@ -1,13 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { humanize, money } from "@/lib/utils";
-import { ArrowRight, HandCoins } from "lucide-react";
+import { ArrowRight, HandCoins, Wallet2 } from "lucide-react";
 import Link from "next/link";
 
 export function BusinessPerformanceCard({ row }: { row: {
   id: number; name: string; code: string; currency: string; business_type: string; my_role: string;
   ownership_percent: number; profit_share_percent: number; can_view_financials: boolean;
   metrics: { net_sales: number; net_profit: number; attributable_profit?: number; receivables: number };
+  collected_this_month: number;
 } }) {
   const owner = row.my_role === "owner";
   return (
@@ -27,10 +28,13 @@ export function BusinessPerformanceCard({ row }: { row: {
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-[var(--surface-soft)] p-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Net sales</p><p className="mt-1 truncate text-lg font-black tracking-[-0.03em]">{money(row.metrics.net_sales, row.currency)}</p></div>
-            <div className="rounded-2xl bg-[var(--brand-deep)] p-3.5 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.11em] text-white/50">{owner ? "Your profit" : "Net profit"}</p><p className="mt-1 truncate text-lg font-black tracking-[-0.03em]">{money(owner ? row.metrics.attributable_profit ?? 0 : row.metrics.net_profit, row.currency)}</p></div>
+            <div className="rounded-2xl bg-[var(--brand-deep)] p-3.5 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.11em] text-white/50">{owner ? "Your expected profit" : "Expected net profit"}</p><p className="mt-1 truncate text-lg font-black tracking-[-0.03em]">{money(owner ? row.metrics.attributable_profit ?? 0 : row.metrics.net_profit, row.currency)}</p></div>
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-4">
-            <div className="flex items-center gap-2 text-xs text-[var(--ink-soft)]"><HandCoins size={15} />Receivable {money(row.metrics.receivables, row.currency)}</div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--ink-soft)]">
+              <span className="flex items-center gap-2"><HandCoins size={15} />Receivable {money(row.metrics.receivables, row.currency)}</span>
+              {owner ? <span className="flex items-center gap-2"><Wallet2 size={15} />Collected {money(row.collected_this_month, row.currency)} this month</span> : null}
+            </div>
             <Badge tone="success">Live</Badge>
           </div>
         </div>

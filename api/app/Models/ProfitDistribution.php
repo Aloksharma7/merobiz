@@ -17,7 +17,7 @@ class ProfitDistribution extends Model
     protected function casts(): array
     {
         return [
-            'distribution_date' => 'date',
+            'distribution_date' => 'date:Y-m-d',
             'amount' => 'decimal:2',
             'method' => PaymentMethod::class,
         ];

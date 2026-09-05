@@ -13,6 +13,9 @@
   --brand-soft: #dff1e9;
   --accent: #eaa737;
   --accent-soft: #fff1d6;
+  --on-brand: #ffffff;
+  --on-brand-deep: #ffffff;
+  --on-accent: #101915;
   --danger: #b94141;
   --danger-soft: #fce8e8;
   --info: #315f8e;
@@ -116,7 +119,7 @@ select:not(:disabled) {
 
 @keyframes app-enter {
   from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes modal-backdrop-in {

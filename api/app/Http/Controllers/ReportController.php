@@ -13,9 +13,7 @@ class ReportController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly DashboardService $dashboard)
-    {
-    }
+    public function __construct(private readonly DashboardService $dashboard) {}
 
     public function profitLoss(Request $request, Business $business): JsonResponse
     {

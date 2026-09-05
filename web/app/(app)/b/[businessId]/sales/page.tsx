@@ -1,6 +1,7 @@
 "use client";
 
 import { InvoiceDetailModal } from "@/components/forms/invoice-detail-modal";
+import { ProjectSaleFormModal } from "@/components/forms/project-sale-form-modal";
 import { SaleFormModal } from "@/components/forms/sale-form-modal";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,14 +11,15 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Input, Select } from "@/components/ui/fields";
 import { PageLoading, TableLoading } from "@/components/ui/loading";
 import { PageHeader } from "@/components/ui/page-header";
-import { api } from "@/lib/api";
+import { api, apiError, downloadFile } from "@/lib/api";
 import { useBusinesses } from "@/lib/business-context";
 import type { Customer, Invoice, Paginated, Product } from "@/lib/types";
 import { money, prettyDate } from "@/lib/utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Banknote, FileClock, HandCoins, Plus, ReceiptText, Search, ShoppingBag } from "lucide-react";
+import { Banknote, Download, FileClock, HandCoins, Plus, ReceiptText, Search, ShoppingBag } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 export default function SalesPage() {
   return <Suspense fallback={<PageLoading />}><SalesPageContent /></Suspense>;
@@ -29,19 +31,33 @@ function SalesPageContent() {
   const { getBusiness, can } = useBusinesses();
   const business = getBusiness(businessId);
   const canCreate = can(business, "sales.create") || can(business, "sales.manage");
-  const canSeeAll = can(business, "sales.manage");
-  const employee = business?.my_role === "employee";
+  const canSeeAll = can(business, "sales.manage") || can(business, "sales.view");
+  const canExport = can(business, "sales.manage");
   const [newSale, setNewSale] = useState(false);
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [mineOnly, setMineOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
 
-  useEffect(() => { if (canCreate && searchParams.get("new") === "1") setNewSale(true); }, [canCreate, searchParams]);
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      await downloadFile(`/businesses/${businessId}/invoices/export`, { search: search || undefined, status, mine: mineOnly ? 1 : undefined }, `sales-${businessId}.csv`);
+    } catch (error) {
+      toast.error("Could not export sales", { description: apiError(error) });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const projectParam = searchParams.get("project");
+  useEffect(() => { if (canCreate && (searchParams.get("new") === "1" || projectParam)) setNewSale(true); }, [canCreate, searchParams, projectParam]);
 
   const invoices = useQuery({
-    queryKey: ["invoices", businessId, { search, status, page }],
-    queryFn: async () => (await api.get<Paginated<Invoice>>(`/businesses/${businessId}/invoices`, { params: { search: search || undefined, status, page, per_page: 20 } })).data,
+    queryKey: ["invoices", businessId, { search, status, page, mine: canSeeAll && mineOnly }],
+    queryFn: async () => (await api.get<Paginated<Invoice>>(`/businesses/${businessId}/invoices`, { params: { search: search || undefined, status, page, per_page: 20, mine: canSeeAll && mineOnly ? 1 : undefined } })).data,
     placeholderData: keepPreviousData,
   });
   const customers = useQuery({ queryKey: ["customers", businessId, "sale-options"], queryFn: async () => (await api.get<Paginated<Customer>>(`/businesses/${businessId}/customers`, { params: { active: 1, per_page: 100 } })).data.data });
@@ -59,36 +75,41 @@ function SalesPageContent() {
 
   return (
     <div className="space-y-7">
-      <PageHeader eyebrow={business.name} title={employee ? "My sales & invoices" : "Sales & invoices"} description={canSeeAll ? "See company sales as they are entered, manage invoices and follow customer payments." : "Only sales created by you appear here. Add sales, create bills and follow payments for your own invoices."} actions={canCreate ? <Button leftIcon={<Plus size={17} />} onClick={() => setNewSale(true)}>New sale</Button> : undefined} />
+      <PageHeader eyebrow={business.name} title={canSeeAll && !mineOnly ? "Sales & invoices" : "My sales & invoices"} description={canSeeAll ? mineOnly ? "Showing only sales created by you. Turn this off to see the whole company's sales." : "See company sales as they are entered, manage invoices and follow customer payments." : "Only sales created by you appear here. Add sales, create bills and follow payments for your own invoices."} actions={canExport || canCreate ? <>{canExport ? <Button variant="secondary" leftIcon={<Download size={16} />} onClick={() => void exportCsv()} loading={exporting}>Export CSV</Button> : null}{canCreate ? <Button leftIcon={<Plus size={17} />} onClick={() => setNewSale(true)}>New sale</Button> : null}</> : undefined} />
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MiniStat label={employee ? "My invoices shown" : "Invoices shown"} value={String(rows.length)} icon={ReceiptText} />
-        <MiniStat label={employee ? "My invoiced" : "Invoiced"} value={money(pageStats.total, business.currency)} icon={ShoppingBag} />
-        <MiniStat label={employee ? "My collected" : "Collected"} value={money(pageStats.collected, business.currency)} icon={Banknote} />
-        <MiniStat label={employee ? "My outstanding" : "Outstanding"} value={money(pageStats.balance, business.currency)} icon={HandCoins} />
+        <MiniStat label={mineOnly ? "My invoices shown" : "Invoices shown"} value={String(rows.length)} icon={ReceiptText} />
+        <MiniStat label={mineOnly ? "My invoiced" : "Invoiced"} value={money(pageStats.total, business.currency)} icon={ShoppingBag} />
+        <MiniStat label={mineOnly ? "My collected" : "Collected"} value={money(pageStats.collected, business.currency)} icon={Banknote} />
+        <MiniStat label={mineOnly ? "My outstanding" : "Outstanding"} value={money(pageStats.balance, business.currency)} icon={HandCoins} />
       </section>
 
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-[var(--line)] p-4 lg:flex-row lg:items-center">
           <label className="relative min-w-0 flex-1"><span className="sr-only">Search invoices</span><Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-soft)]" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} className="pl-10" placeholder="Search invoice or customer" /></label>
           <Select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="lg:w-44"><option value="all">All invoice statuses</option><option value="draft">Draft</option><option value="issued">Issued</option><option value="partial">Partially paid</option><option value="paid">Paid</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option></Select>
+          {canSeeAll ? <label className="flex shrink-0 items-center gap-2 rounded-xl border border-[var(--line)] px-3.5 py-2.5 text-sm font-semibold text-[var(--ink)]"><input type="checkbox" checked={mineOnly} onChange={(event) => { setMineOnly(event.target.checked); setPage(1); }} className="h-4 w-4 rounded accent-[var(--brand)]" />Only my sales</label> : null}
         </div>
 
         {invoices.isLoading ? <TableLoading /> : rows.length ? (
           <>
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[860px] text-left text-sm">
-                <thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Invoice</th><th className="px-4 py-3 font-bold">Customer</th>{!employee ? <th className="px-4 py-3 font-bold">Seller</th> : null}<th className="px-4 py-3 font-bold">Status</th><th className="px-4 py-3 text-right font-bold">Total</th><th className="px-4 py-3 text-right font-bold">Balance</th><th className="px-5 py-3 text-right font-bold">Action</th></tr></thead>
-                <tbody className="divide-y divide-[var(--line)]">{rows.map((invoice) => <tr key={invoice.id} className="transition hover:bg-[var(--surface-soft)]"><td className="px-5 py-3.5"><p className="font-extrabold">{invoice.invoice_number}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)}</p></td><td className="px-4 py-3.5"><p className="max-w-[200px] truncate font-semibold">{invoice.customer_name || invoice.customer?.name || "Walk-in customer"}</p></td>{!employee ? <td className="px-4 py-3.5 text-[var(--ink-soft)]">{invoice.creator?.name ?? "—"}</td> : null}<td className="px-4 py-3.5"><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></td><td className="px-4 py-3.5 text-right font-black">{money(invoice.total_amount, business.currency)}</td><td className="px-4 py-3.5 text-right font-semibold text-[var(--ink-soft)]">{money(invoice.balance_amount, business.currency)}</td><td className="px-5 py-3.5 text-right"><Button size="sm" variant="secondary" onClick={() => setSelected(invoice)}>Open</Button></td></tr>)}</tbody>
+                <thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Invoice</th><th className="px-4 py-3 font-bold">Customer</th>{canSeeAll ? <th className="px-4 py-3 font-bold">Seller</th> : null}<th className="px-4 py-3 font-bold">Status</th><th className="px-4 py-3 text-right font-bold">Total</th><th className="px-4 py-3 text-right font-bold">Balance</th><th className="px-5 py-3 text-right font-bold">Action</th></tr></thead>
+                <tbody className="divide-y divide-[var(--line)]">{rows.map((invoice) => <tr key={invoice.id} className="transition hover:bg-[var(--surface-soft)]"><td className="px-5 py-3.5"><p className="font-extrabold">{invoice.invoice_number}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)}</p></td><td className="px-4 py-3.5"><p className="max-w-[200px] truncate font-semibold">{invoice.customer_name || invoice.customer?.name || "Walk-in customer"}</p></td>{canSeeAll ? <td className="px-4 py-3.5 text-[var(--ink-soft)]">{invoice.creator?.name ?? "—"}</td> : null}<td className="px-4 py-3.5"><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></td><td className="px-4 py-3.5 text-right font-black">{money(invoice.total_amount, business.currency)}</td><td className="px-4 py-3.5 text-right font-semibold text-[var(--ink-soft)]">{money(invoice.balance_amount, business.currency)}</td><td className="px-5 py-3.5 text-right"><Button size="sm" variant="secondary" onClick={() => setSelected(invoice)}>Open</Button></td></tr>)}</tbody>
               </table>
             </div>
-            <div className="divide-y divide-[var(--line)] md:hidden">{rows.map((invoice) => <button type="button" key={invoice.id} onClick={() => setSelected(invoice)} className="w-full p-4 text-left hover:bg-[var(--surface-soft)]"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold">{invoice.invoice_number}</p><p className="mt-1 text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)} · {invoice.customer_name || invoice.customer?.name || "Walk-in"}</p></div><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></div><div className="mt-3 flex items-end justify-between gap-4"><p className="text-xs font-bold text-[var(--ink-soft)]">Balance {money(invoice.balance_amount, business.currency)}</p><p className="text-lg font-black">{money(invoice.total_amount, business.currency)}</p></div></button>)}</div>
+            <div className="divide-y divide-[var(--line)] md:hidden">{rows.map((invoice) => <button type="button" key={invoice.id} onClick={() => setSelected(invoice)} className="w-full p-4 text-left hover:bg-[var(--surface-soft)]"><div className="flex items-start justify-between gap-3"><div><p className="font-extrabold">{invoice.invoice_number}</p><p className="mt-1 text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)} · {invoice.customer_name || invoice.customer?.name || "Walk-in"}{canSeeAll ? ` · ${invoice.creator?.name ?? "—"}` : ""}</p></div><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></div><div className="mt-3 flex items-end justify-between gap-4"><p className="text-xs font-bold text-[var(--ink-soft)]">Balance {money(invoice.balance_amount, business.currency)}</p><p className="text-lg font-black">{money(invoice.total_amount, business.currency)}</p></div></button>)}</div>
             <Pagination current={invoices.data?.meta.current_page ?? 1} last={invoices.data?.meta.last_page ?? 1} onChange={setPage} />
           </>
         ) : <EmptyState icon={search || status !== "all" ? FileClock : ReceiptText} title={search || status !== "all" ? "No matching invoices" : "Create your first invoice"} description="Change the filters or create a new sale." action={canCreate ? <Button leftIcon={<Plus size={16} />} onClick={() => setNewSale(true)}>New sale</Button> : undefined} />}
       </Card>
 
-      <SaleFormModal businessId={businessId} open={canCreate && newSale} onClose={() => setNewSale(false)} customers={customers.data ?? []} products={products.data ?? []} currency={business.currency} defaultTax={business.default_tax_rate} canManageCosts={can(business, "products.manage")} showBuyerPan={business.settings?.invoice?.show_customer_pan ?? false} onCreated={(invoice) => setSelected(invoice)} />
+      {business.is_installment ? (
+        <ProjectSaleFormModal businessId={businessId} open={canCreate && newSale} onClose={() => setNewSale(false)} currency={business.currency} onCreated={(invoice) => setSelected(invoice)} defaultProjectId={projectParam} />
+      ) : (
+        <SaleFormModal businessId={businessId} open={canCreate && newSale} onClose={() => setNewSale(false)} customers={customers.data ?? []} products={products.data ?? []} currency={business.currency} defaultTax={business.default_tax_rate} canManageCosts={can(business, "products.manage")} showBuyerPan={business.settings?.invoice?.show_customer_pan ?? false} onCreated={(invoice) => setSelected(invoice)} />
+      )}
       <InvoiceDetailModal business={business} invoice={selected} open={Boolean(selected)} onClose={() => setSelected(null)} />
     </div>
   );

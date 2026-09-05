@@ -11,6 +11,7 @@ type BusinessContextValue = {
   isLoading: boolean;
   getBusiness: (id?: string | number | null) => Business | undefined;
   can: (business: Business | undefined, permission: string) => boolean;
+  hasFeature: (business: Business | undefined, feature: "installments") => boolean;
 };
 
 const BusinessContext = createContext<BusinessContextValue | null>(null);
@@ -31,6 +32,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     can: (business, permission) => Boolean(
       business && (business.permissions.includes("*") || business.permissions.includes(permission)),
     ),
+    hasFeature: (business, feature) => Boolean(business?.settings?.features?.[feature]),
   }), [query.data, query.isLoading]);
 
   return <BusinessContext.Provider value={value}>{children}</BusinessContext.Provider>;

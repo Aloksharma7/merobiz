@@ -18,12 +18,12 @@ export function defaultRange(): DateRangeValue {
   return { start: iso(startOfMonth(now)), end: iso(now) };
 }
 
-export function DateRangeControl({ value, onChange, className }: { value: DateRangeValue; onChange: (range: DateRangeValue) => void; className?: string }) {
+export function DateRangeControl({ value, onChange, className, showLast30Days = true }: { value: DateRangeValue; onChange: (range: DateRangeValue) => void; className?: string; showLast30Days?: boolean }) {
   const [custom, setCustom] = useState(false);
   const now = new Date();
   const presets = [
     { label: "This month", value: { start: iso(startOfMonth(now)), end: iso(now) } },
-    { label: "Last 30 days", value: { start: iso(subDays(now, 29)), end: iso(now) } },
+    ...(showLast30Days ? [{ label: "Last 30 days", value: { start: iso(subDays(now, 29)), end: iso(now) } }] : []),
     { label: "Previous month", value: { start: iso(startOfMonth(subMonths(now, 1))), end: iso(subDays(startOfMonth(now), 1)) } },
     { label: "This year", value: { start: iso(startOfYear(now)), end: iso(now) } },
   ];

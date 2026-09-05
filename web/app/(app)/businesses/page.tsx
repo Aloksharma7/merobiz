@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageLoading } from "@/components/ui/loading";
 import { PageHeader } from "@/components/ui/page-header";
 import { useAuth } from "@/lib/auth-context";
+import { businessThemeStyle } from "@/lib/branding";
 import { useBusinesses } from "@/lib/business-context";
 import { humanize } from "@/lib/utils";
 import { ArrowRight, Building2, CircleGauge, Plus, ShieldCheck } from "lucide-react";
@@ -40,9 +41,9 @@ export default function BusinessesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {businesses.map((business) => (
-            <Link href={`/b/${business.id}`} key={business.id} className="group block">
+            <Link href={`/b/${business.id}`} key={business.id} className="group block" style={businessThemeStyle(business)}>
               <Card className="h-full overflow-hidden transition duration-200 hover:-translate-y-0.5 hover:border-[#adc0b1] hover:shadow-[0_16px_40px_rgb(17_48_35/0.08)]">
-                <div className="relative h-28 overflow-hidden bg-[var(--brand-deep)] p-5 text-white surface-grid">
+                <div className="relative h-28 overflow-hidden bg-[var(--brand-deep)] p-5 text-[var(--on-brand-deep)] surface-grid">
                   <div className="absolute -right-7 -top-9 h-28 w-28 rounded-full bg-[var(--accent)]/23" />
                   <div className="relative flex items-start justify-between gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 text-sm font-black backdrop-blur">{business.code}</span><Badge tone="brand">{business.status}</Badge></div>
                 </div>

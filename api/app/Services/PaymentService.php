@@ -39,8 +39,14 @@ class PaymentService
 
             $amount = Decimal::of($data['amount']);
             $balance = Decimal::of($lockedInvoice->balance_amount);
-            if ($amount->isGreaterThan($balance)) {
-                throw ValidationException::withMessages(['amount' => 'The payment cannot be greater than the outstanding balance.']);
+            if ($amount->isGreaterThan($balance->plus(0.01))) {
+                throw ValidationException::withMessages([
+                    'amount' => sprintf(
+                        'You tried to record %s, but only %s is still outstanding on this invoice. Someone may have just recorded another payment — refresh and try again.',
+                        number_format((float) $data['amount'], 2),
+                        number_format((float) $lockedInvoice->balance_amount, 2),
+                    ),
+                ]);
             }
 
             /** @var Business $lockedBusiness */

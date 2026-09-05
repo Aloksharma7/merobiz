@@ -3,8 +3,10 @@
 import { BusinessPerformanceCard } from "@/components/dashboard/business-performance-card";
 import { DateRangeControl, defaultRange, type DateRangeValue } from "@/components/dashboard/date-range-control";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { MyProfileCard } from "@/components/dashboard/my-profile-card";
 import { TrendChart } from "@/components/dashboard/trend-chart";
 import { BusinessFormModal } from "@/components/forms/business-form-modal";
+import { ProfitWithdrawalFormModal } from "@/components/forms/profit-withdrawal-form-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -15,9 +17,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { PortfolioDashboard } from "@/lib/types";
-import { money, prettyDate } from "@/lib/utils";
+import { cn, humanize, money, prettyDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, CircleDollarSign, Clock3, HandCoins, Landmark, Plus, ReceiptText, TrendingUp, UsersRound } from "lucide-react";
+import { Building2, CalendarClock, CircleDollarSign, Clock3, HandCoins, Landmark, Plus, ReceiptText, TrendingUp, UsersRound, Wallet2 } from "lucide-react";
 import { useState } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -28,6 +30,7 @@ export default function PortfolioPage() {
   const employeeWorkspace = user?.workspace?.mode === "employee";
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
   const [businessModal, setBusinessModal] = useState(false);
+  const [withdrawalOpen, setWithdrawalOpen] = useState(false);
   const query = useQuery({
     queryKey: ["portfolio-dashboard", range],
     queryFn: async () => (await api.get<PortfolioDashboard>("/portfolio/dashboard", { params: range })).data,
@@ -48,9 +51,42 @@ export default function PortfolioPage() {
   const data = query.data;
   const currency = data.reporting_currency ?? data.businesses[0]?.currency ?? "NPR";
   const ownerMode = data.mode === "owner";
+  const ownedBusinesses = data.businesses.filter((row) => row.my_role === "owner").map((row) => ({ id: row.id, name: row.name }));
+  const profitTakenBreakdown = data.businesses.filter((row) => row.collected_this_month > 0).sort((a, b) => b.collected_this_month - a.collected_this_month);
 
   return (
     <div className="space-y-7">
+      <section className={cn("grid gap-4 sm:grid-cols-2", ownerMode ? "xl:grid-cols-3" : "xl:grid-cols-2")}>
+        <MyProfileCard
+          name={user?.name ?? ""}
+          email={user?.email}
+          initials={user?.initials ?? ""}
+          roleLabel={ownerMode ? "Portfolio owner" : humanize(data.mode)}
+          onLogProfit={ownerMode && ownedBusinesses.length ? () => setWithdrawalOpen(true) : undefined}
+        />
+        <MetricCard emphasis={!ownerMode} label={ownerMode ? "This month's expected profit" : "This month's expected net profit"} value={data.month_to_date.profit} currency={currency} icon={CalendarClock} hint="Month to date" />
+        {ownerMode ? (
+          <MetricCard
+            emphasis
+            label="Profit taken"
+            value={data.profit_collected_this_month}
+            currency={currency}
+            icon={Wallet2}
+            hint={profitTakenBreakdown.length ? (
+              <div className="space-y-1">
+                {profitTakenBreakdown.map((row) => (
+                  <div key={row.id} className="flex items-center justify-between gap-3">
+                    <span className="truncate">{row.name}</span>
+                    <span className="shrink-0 font-bold">{money(row.collected_this_month, row.currency)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : "Nothing logged yet this month"}
+          />
+        ) : null}
+      </section>
+      {ownedBusinesses.length ? <ProfitWithdrawalFormModal open={withdrawalOpen} onClose={() => setWithdrawalOpen(false)} businesses={ownedBusinesses} /> : null}
+
       <PageHeader
         eyebrow={ownerMode ? "Portfolio owner" : "Administration"}
         title={ownerMode ? "All your businesses, one clear answer" : "Business overview"}
@@ -58,7 +94,7 @@ export default function PortfolioPage() {
         actions={data.can_create_business ? <Button leftIcon={<Plus size={17} />} onClick={() => setBusinessModal(true)}>Add business</Button> : undefined}
       />
 
-      <DateRangeControl value={range} onChange={setRange} />
+      <DateRangeControl value={range} onChange={setRange} showLast30Days={false} />
 
       {data.mixed_currencies ? <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"><strong>Mixed currencies:</strong> combined cards are not exchange-rate converted. Open each business for exact figures.</div> : null}
 
@@ -75,7 +111,7 @@ export default function PortfolioPage() {
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Portfolio summary">
-            {ownerMode ? <MetricCard emphasis label="Your estimated profit" value={data.summary.attributable_profit ?? 0} currency={currency} icon={CircleDollarSign} hint="Ownership-adjusted live estimate" /> : <MetricCard emphasis label="Business net profit" value={data.summary.net_profit} currency={currency} icon={CircleDollarSign} hint="Sales after costs, expenses and commissions" />}
+            {ownerMode ? <MetricCard emphasis label="Your expected profit" value={data.summary.attributable_profit ?? 0} currency={currency} icon={CircleDollarSign} hint="Ownership-adjusted, not yet withdrawn" /> : <MetricCard emphasis label="Business expected profit" value={data.summary.net_profit} currency={currency} icon={CircleDollarSign} hint="Sales after costs, expenses and commissions" />}
             <MetricCard label="Combined net sales" value={data.summary.net_sales} currency={currency} icon={TrendingUp} hint={`${data.summary.invoice_count} invoices`} />
             <MetricCard label="Cash collected" value={data.summary.cash_collected} currency={currency} icon={Landmark} hint="Payments received in this period" />
             <MetricCard label="Customer receivables" value={data.summary.receivables} currency={currency} icon={HandCoins} hint="Balance on open invoices" />
@@ -84,7 +120,7 @@ export default function PortfolioPage() {
           {ownerMode ? (
             <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-4">
               {[
-                ["Business net profit", data.summary.net_profit, "After costs, expenses and commissions"],
+                ["Expected business net profit", data.summary.net_profit, "After costs, expenses and commissions, not yet withdrawn"],
                 ["Operating expenses", data.summary.expenses, "Approved expenses in this period"],
                 ["Profit received", data.summary.distributed_profit ?? 0, "Partner distributions paid to you"],
                 ["Profit still payable", data.summary.outstanding_profit ?? 0, "Closed allocations not yet distributed"],

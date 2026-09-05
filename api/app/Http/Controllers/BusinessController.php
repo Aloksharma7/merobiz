@@ -69,6 +69,8 @@ class BusinessController extends Controller
                 'slug' => $slug,
                 'code' => $code,
                 'business_type' => $data['business_type'],
+                'category' => $data['category'],
+                'product_type' => $data['category'] === 'standard' ? ($data['product_type'] ?? null) : null,
                 'currency' => mb_strtoupper($data['currency'] ?? 'NPR'),
                 'pan_number' => $data['pan_number'] ?? null,
                 'vat_number' => $data['vat_number'] ?? null,
@@ -120,6 +122,7 @@ class BusinessController extends Controller
             $business->memberships()->create([
                 'user_id' => $request->user()->id,
                 'role' => BusinessRole::Owner,
+                'full_control' => true,
                 'title' => 'Owner',
                 'commission_rate' => 0,
                 'active' => true,

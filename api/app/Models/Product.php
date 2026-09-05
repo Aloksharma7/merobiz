@@ -16,6 +16,7 @@ class Product extends Model
     protected $fillable = [
         'business_id', 'sku', 'name', 'type', 'unit', 'sale_price', 'cost_price',
         'tax_rate', 'track_inventory', 'stock_quantity', 'reorder_level', 'active', 'metadata',
+        'allows_multiple_writers',
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class Product extends Model
             'reorder_level' => 'decimal:3',
             'active' => 'boolean',
             'metadata' => 'array',
+            'allows_multiple_writers' => 'boolean',
         ];
     }
 

@@ -29,6 +29,7 @@ class StoreProductRequest extends FormRequest
             'reorder_level' => ['sometimes', 'numeric', 'min:0'],
             'active' => ['sometimes', 'boolean'],
             'metadata' => ['nullable', 'array'],
+            'allows_multiple_writers' => ['sometimes', 'boolean'],
         ];
     }
 }

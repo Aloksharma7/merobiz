@@ -16,9 +16,7 @@ class ProfitDistributionController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly ProfitDistributionService $distributions)
-    {
-    }
+    public function __construct(private readonly ProfitDistributionService $distributions) {}
 
     public function index(Request $request, Business $business): AnonymousResourceCollection
     {

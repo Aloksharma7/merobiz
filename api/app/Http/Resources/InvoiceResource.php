@@ -33,6 +33,11 @@ class InvoiceResource extends JsonResource
                 'pan_number' => $this->customer->pan_number,
                 'address' => $this->customer->address,
             ] : null),
+            'project_id' => $this->project_id,
+            'project' => $this->whenLoaded('project', fn () => $this->project ? [
+                'id' => $this->project->id,
+                'client_name' => $this->project->client_name,
+            ] : null),
             'creator' => $this->whenLoaded('creator', fn () => [
                 'id' => $this->creator->id,
                 'name' => $this->creator->name,

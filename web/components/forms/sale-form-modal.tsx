@@ -4,12 +4,19 @@ import { Button } from "@/components/ui/button";
 import { FieldShell, Input, Select, Textarea } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/modal";
 import { api, apiError, fieldErrors } from "@/lib/api";
+import { useBusinesses } from "@/lib/business-context";
 import type { ApiMessage, Customer, Invoice, Product } from "@/lib/types";
 import { money, today } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
+type DraftInstallment = { key: string; due_date: string; amount: string; notes: string };
+
+function emptyInstallment(key: string, dueDate: string): DraftInstallment {
+  return { key, due_date: dueDate, amount: "", notes: "" };
+}
 
 type DraftItem = {
   key: string;
@@ -49,6 +56,8 @@ export function SaleFormModal({
   showBuyerPan?: boolean;
   onCreated?: (invoice: Invoice) => void;
 }) {
+  const { getBusiness, hasFeature } = useBusinesses();
+  const installmentsEnabled = hasFeature(getBusiness(businessId), "installments");
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -62,6 +71,9 @@ export function SaleFormModal({
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<DraftItem[]>([emptyLine("line-1")]);
   const nextLineKey = useRef(2);
+  const [useInstallments, setUseInstallments] = useState(false);
+  const [installments, setInstallments] = useState<DraftInstallment[]>([]);
+  const nextInstallmentKey = useRef(1);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const queryClient = useQueryClient();
 
@@ -80,6 +92,9 @@ export function SaleFormModal({
       setNotes("");
       nextLineKey.current = 2;
       setItems([{ ...emptyLine("line-1"), tax_rate: String(defaultTax) }]);
+      setUseInstallments(false);
+      nextInstallmentKey.current = 1;
+      setInstallments([]);
       setErrors({});
     }
   }, [defaultTax, open]);
@@ -101,6 +116,19 @@ export function SaleFormModal({
     const netSales = beforeGlobal - globalDiscount;
     return { subtotal, discount: lines.reduce((sum, line) => sum + (line.base - line.taxable), 0) + globalDiscount, tax, total: netSales + tax, cost, grossProfit: netSales - cost };
   }, [discount, items]);
+
+  const installmentSum = installments.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const installmentMismatch = useInstallments && Math.abs(installmentSum - totals.total) > 0.01;
+
+  function addInstallment() {
+    setInstallments((current) => [...current, emptyInstallment(`installment-${nextInstallmentKey.current++}`, dueDate || today())]);
+  }
+  function updateInstallment(index: number, key: keyof DraftInstallment, value: string) {
+    setInstallments((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, [key]: value } : row));
+  }
+  function removeInstallment(index: number) {
+    setInstallments((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  }
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -125,6 +153,9 @@ export function SaleFormModal({
           discount_amount: Number(item.discount_amount || 0),
           tax_rate: Number(item.tax_rate || 0),
         })),
+        ...(useInstallments && installments.length >= 2 ? {
+          installments: installments.map((row) => ({ due_date: row.due_date, amount: Number(row.amount), notes: row.notes || null })),
+        } : {}),
       };
       return (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${businessId}/invoices`, payload)).data;
     },
@@ -134,6 +165,8 @@ export function SaleFormModal({
         queryClient.invalidateQueries({ queryKey: ["business-dashboard", String(businessId)] }),
         queryClient.invalidateQueries({ queryKey: ["portfolio-dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["products", String(businessId)] }),
+        queryClient.invalidateQueries({ queryKey: ["customers", String(businessId)] }),
+        queryClient.invalidateQueries({ queryKey: ["customer", String(businessId)] }),
       ]);
       toast.success("Invoice created", { description: `${response.invoice.invoice_number} · ${money(response.invoice.total_amount, currency)}` });
       onCreated?.(response.invoice);
@@ -187,7 +220,7 @@ export function SaleFormModal({
       size="xl"
       footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="sale-form" loading={mutation.isPending}>Issue invoice</Button></>}
     >
-      <form id="sale-form" onSubmit={(event) => { event.preventDefault(); setErrors({}); mutation.mutate(); }} className="space-y-6">
+      <form id="sale-form" onSubmit={(event) => { event.preventDefault(); setErrors({}); if (installmentMismatch) { toast.error("Installments don't add up", { description: `The installments must total ${money(totals.total, currency)}.` }); return; } mutation.mutate(); }} className="space-y-6">
         <div className="rounded-2xl bg-[var(--surface-soft)] p-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <FieldShell label="Customer name" htmlFor="invoice-customer-name" error={errors.customer_name?.[0]} required className="sm:col-span-2">
@@ -240,27 +273,48 @@ export function SaleFormModal({
                 <div className="flex items-center justify-between gap-3"><span className="text-xs font-black uppercase tracking-[0.12em] text-[var(--brand)]">Item {index + 1}</span><button type="button" onClick={() => removeLine(index)} disabled={items.length === 1} className="grid h-9 w-9 place-items-center rounded-lg text-[var(--ink-soft)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-30" aria-label={`Remove item ${index + 1}`}><Trash2 size={16} /></button></div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-12">
                   <FieldShell label="Product or service" htmlFor={`product-${item.key}`} className="lg:col-span-4"><Select id={`product-${item.key}`} value={item.product_id} onChange={(event) => chooseProduct(index, event.target.value)} required={!canManageCosts}><option value="">{canManageCosts ? "Custom line" : "Choose catalog item"}</option>{products.filter((product) => product.active).map((product) => <option value={product.id} key={product.id}>{product.name}</option>)}</Select></FieldShell>
-                  <FieldShell label="Description" htmlFor={`description-${item.key}`} error={errors[`items.${index}.description`]?.[0]} required className="lg:col-span-4"><Input id={`description-${item.key}`} value={item.description} onChange={(event) => updateLine(index, "description", event.target.value)} required /></FieldShell>
-                  <FieldShell label="Quantity" htmlFor={`quantity-${item.key}`} error={errors[`items.${index}.quantity`]?.[0]} required className="lg:col-span-2"><Input id={`quantity-${item.key}`} type="number" min="0.001" step="0.001" value={item.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} required /></FieldShell>
-                  <FieldShell label="Unit price" htmlFor={`price-${item.key}`} error={errors[`items.${index}.unit_price`]?.[0]} required className="lg:col-span-2"><Input id={`price-${item.key}`} type="number" min="0" step="0.01" value={item.unit_price} onChange={(event) => updateLine(index, "unit_price", event.target.value)} required /></FieldShell>
-                  {canManageCosts ? <FieldShell label="Direct cost" htmlFor={`cost-${item.key}`} error={errors[`items.${index}.unit_cost`]?.[0]} hint="Internal" className="lg:col-span-4"><Input id={`cost-${item.key}`} type="number" min="0" step="0.01" value={item.unit_cost} onChange={(event) => updateLine(index, "unit_cost", event.target.value)} /></FieldShell> : null}
-                  <FieldShell label="Line discount" htmlFor={`line-discount-${item.key}`} error={errors[`items.${index}.discount_amount`]?.[0]} className="lg:col-span-4"><Input id={`line-discount-${item.key}`} type="number" min="0" step="0.01" value={item.discount_amount} onChange={(event) => updateLine(index, "discount_amount", event.target.value)} /></FieldShell>
-                  <FieldShell label="Tax rate" htmlFor={`tax-${item.key}`} error={errors[`items.${index}.tax_rate`]?.[0]} hint={canManageCosts ? "%" : "Set by catalogue"} className="lg:col-span-4"><Input id={`tax-${item.key}`} type="number" min="0" max="100" step="0.01" value={item.tax_rate} onChange={(event) => updateLine(index, "tax_rate", event.target.value)} disabled={!canManageCosts} /></FieldShell>
+                  <FieldShell label="Description" htmlFor={`description-${item.key}`} error={errors[`items.${index}.description`]?.[0]} required className="lg:col-span-4"><Input id={`description-${item.key}`} value={item.description} onChange={(event) => updateLine(index, "description", event.target.value)} placeholder="e.g. Website design service" required /></FieldShell>
+                  <FieldShell label="Quantity" htmlFor={`quantity-${item.key}`} error={errors[`items.${index}.quantity`]?.[0]} required className="lg:col-span-2"><Input id={`quantity-${item.key}`} type="number" min="0.001" step="0.001" placeholder="1" value={item.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} required /></FieldShell>
+                  <FieldShell label="Unit price" htmlFor={`price-${item.key}`} error={errors[`items.${index}.unit_price`]?.[0]} required className="lg:col-span-2"><Input id={`price-${item.key}`} type="number" min="0" step="0.01" placeholder="0.00" value={item.unit_price} onChange={(event) => updateLine(index, "unit_price", event.target.value)} required /></FieldShell>
+                  {canManageCosts ? <FieldShell label="Direct cost" htmlFor={`cost-${item.key}`} error={errors[`items.${index}.unit_cost`]?.[0]} hint="Internal" className="lg:col-span-4"><Input id={`cost-${item.key}`} type="number" min="0" step="0.01" placeholder="0.00" value={item.unit_cost} onChange={(event) => updateLine(index, "unit_cost", event.target.value)} /></FieldShell> : null}
+                  <FieldShell label="Line discount" htmlFor={`line-discount-${item.key}`} error={errors[`items.${index}.discount_amount`]?.[0]} className="lg:col-span-4"><Input id={`line-discount-${item.key}`} type="number" min="0" step="0.01" placeholder="0.00" value={item.discount_amount} onChange={(event) => updateLine(index, "discount_amount", event.target.value)} /></FieldShell>
+                  <FieldShell label="Tax rate" htmlFor={`tax-${item.key}`} error={errors[`items.${index}.tax_rate`]?.[0]} hint={canManageCosts ? "%" : "Set by catalogue"} className="lg:col-span-4"><Input id={`tax-${item.key}`} type="number" min="0" max="100" step="0.01" placeholder="0" value={item.tax_rate} onChange={(event) => updateLine(index, "tax_rate", event.target.value)} disabled={!canManageCosts} /></FieldShell>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
+        {installmentsEnabled ? <div className="rounded-2xl border border-[var(--line)] p-4">
+          <label className="flex items-center gap-2.5 text-sm font-bold"><input type="checkbox" checked={useInstallments} onChange={(event) => { setUseInstallments(event.target.checked); if (event.target.checked && installments.length === 0) { setInstallments([emptyInstallment(`installment-${nextInstallmentKey.current++}`, dueDate || today()), emptyInstallment(`installment-${nextInstallmentKey.current++}`, dueDate || today())]); } }} className="h-4 w-4 accent-[var(--brand)]" />Split into installments</label>
+          <p className="mt-1.5 text-xs leading-5 text-[var(--ink-soft)]">Agree a down payment and later scheduled payments instead of one full amount.</p>
+          {useInstallments ? (
+            <div className="mt-4 space-y-3">
+              {installments.map((row, index) => (
+                <div key={row.key} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_140px_40px] sm:items-end">
+                  <FieldShell label={`Installment ${index + 1}`} htmlFor={`installment-note-${row.key}`} hint="Optional label"><Input id={`installment-note-${row.key}`} value={row.notes} onChange={(event) => updateInstallment(index, "notes", event.target.value)} placeholder="e.g. Down payment" /></FieldShell>
+                  <FieldShell label="Due date" htmlFor={`installment-date-${row.key}`}><Input id={`installment-date-${row.key}`} type="date" value={row.due_date} onChange={(event) => updateInstallment(index, "due_date", event.target.value)} /></FieldShell>
+                  <FieldShell label="Amount" htmlFor={`installment-amount-${row.key}`}><Input id={`installment-amount-${row.key}`} type="number" min="0.01" step="0.01" placeholder="0.00" value={row.amount} onChange={(event) => updateInstallment(index, "amount", event.target.value)} /></FieldShell>
+                  <button type="button" onClick={() => removeInstallment(index)} disabled={installments.length <= 2} className="grid h-11 w-11 place-items-center rounded-lg text-[var(--ink-soft)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-30" aria-label={`Remove installment ${index + 1}`}><Trash2 size={16} /></button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-3">
+                <Button type="button" variant="quiet" size="sm" leftIcon={<Plus size={15} />} onClick={addInstallment}>Add installment</Button>
+                <p className={`text-xs font-semibold ${installmentMismatch ? "text-[var(--danger)]" : "text-[var(--ink-soft)]"}`}>{money(installmentSum, currency)} of {money(totals.total, currency)}</p>
+              </div>
+            </div>
+          ) : null}
+        </div> : null}
+
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-4">
-            <FieldShell label="Invoice discount" htmlFor="invoice-discount" error={errors.discount_amount?.[0]} hint="Applied across all lines"><Input id="invoice-discount" type="number" min="0" step="0.01" value={discount} onChange={(event) => setDiscount(event.target.value)} /></FieldShell>
+            <FieldShell label="Invoice discount" htmlFor="invoice-discount" error={errors.discount_amount?.[0]} hint="Applied across all lines"><Input id="invoice-discount" type="number" min="0" step="0.01" placeholder="0.00" value={discount} onChange={(event) => setDiscount(event.target.value)} /></FieldShell>
             <FieldShell label="Notes or payment instructions" htmlFor="invoice-notes" error={errors.notes?.[0]}><Textarea id="invoice-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Thank you, renewal date, bank details, delivery notes…" /></FieldShell>
           </div>
-          <div className="rounded-[20px] bg-[var(--brand-deep)] p-5 text-white">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-white/45">Invoice summary</p>
-            <div className="mt-4 space-y-2.5 text-sm"><SummaryLine label="Subtotal" value={money(totals.subtotal, currency)} /><SummaryLine label="Discount" value={`− ${money(totals.discount, currency)}`} /><SummaryLine label="Tax" value={money(totals.tax, currency)} /><div className="my-3 border-t border-white/12" /><SummaryLine label="Customer total" value={money(totals.total, currency)} strong />{canManageCosts ? <><div className="my-3 border-t border-white/12" /><SummaryLine label="Estimated gross profit" value={money(totals.grossProfit, currency)} muted /></> : null}</div>
-            <p className="mt-4 text-[11px] leading-5 text-white/42">{canManageCosts ? "Employee commission and business expenses are deducted later to calculate net profit." : "The sale is recorded immediately in this business. No approval step is required."}</p>
+          <div className="rounded-[20px] bg-[var(--brand-deep)] p-5 text-[var(--on-brand-deep)]">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--on-brand-deep)]/45">Invoice summary</p>
+            <div className="mt-4 space-y-2.5 text-sm"><SummaryLine label="Subtotal" value={money(totals.subtotal, currency)} /><SummaryLine label="Discount" value={`− ${money(totals.discount, currency)}`} /><SummaryLine label="Tax" value={money(totals.tax, currency)} /><div className="my-3 border-t border-[var(--on-brand-deep)]/12" /><SummaryLine label="Customer total" value={money(totals.total, currency)} strong />{canManageCosts ? <><div className="my-3 border-t border-[var(--on-brand-deep)]/12" /><SummaryLine label="Estimated gross profit" value={money(totals.grossProfit, currency)} muted /></> : null}</div>
+            <p className="mt-4 text-[11px] leading-5 text-[var(--on-brand-deep)]/42">{canManageCosts ? "Employee commission and business expenses are deducted later to calculate net profit." : "The sale is recorded immediately in this business. No approval step is required."}</p>
           </div>
         </div>
       </form>
@@ -269,5 +323,5 @@ export function SaleFormModal({
 }
 
 function SummaryLine({ label, value, strong, muted }: { label: string; value: string; strong?: boolean; muted?: boolean }) {
-  return <div className={`flex items-center justify-between gap-4 ${strong ? "text-base" : ""} ${muted ? "text-[#95d7bf]" : ""}`}><span className={strong ? "font-bold" : "text-white/58"}>{label}</span><span className={strong ? "font-black" : "font-semibold"}>{value}</span></div>;
+  return <div className={`flex items-center justify-between gap-4 ${strong ? "text-base" : ""} ${muted ? "text-[#95d7bf]" : ""}`}><span className={strong ? "font-bold" : "text-[var(--on-brand-deep)]/58"}>{label}</span><span className={strong ? "font-black" : "font-semibold"}>{value}</span></div>;
 }

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { forwardRef, useState, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 type FieldShellProps = {
   label: string;
@@ -30,6 +31,23 @@ const fieldClasses = "h-11 w-full rounded-xl border border-[var(--line-strong)] 
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...props }, ref) {
   return <input ref={ref} className={cn(fieldClasses, className)} {...props} />;
+});
+
+export const PasswordInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function PasswordInput({ className, ...props }, ref) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input ref={ref} type={visible ? "text" : "password"} className={cn(fieldClasses, "pr-11", className)} {...props} />
+      <button
+        type="button"
+        onClick={() => setVisible((current) => !current)}
+        className="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[#eef1ee] hover:text-[var(--ink)]"
+        aria-label={visible ? "Hide password" : "Show password"}
+      >
+        {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
 });
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Select({ className, ...props }, ref) {

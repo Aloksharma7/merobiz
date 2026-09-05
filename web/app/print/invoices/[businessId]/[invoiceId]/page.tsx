@@ -307,7 +307,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 
 function TotalRow({ label, value, currency, muted = false, strong = false, due = false }: { label: string; value: number | string | null | undefined; currency: string; muted?: boolean; strong?: boolean; due?: boolean }) {
   return (
-    <div className={`flex items-center justify-between gap-4 border-b border-[#c7cec8] px-3 py-2 last:border-b-0 ${strong ? "bg-[#edf1ed]" : due ? "bg-[var(--brand-deep)] text-white" : ""}`}>
+    <div className={`flex items-center justify-between gap-4 border-b border-[#c7cec8] px-3 py-2 last:border-b-0 ${strong ? "bg-[#edf1ed]" : due ? "bg-[var(--brand-deep)] text-[var(--on-brand-deep)]" : ""}`}>
       <span className={`${strong || due ? "font-black" : "font-semibold"} ${muted && !due ? "text-[#68736c]" : ""}`}>{label}</span>
       <span className={`${strong || due ? "font-black" : "font-semibold"} tabular-nums`}>{invoiceMoney(value, currency)}</span>
     </div>

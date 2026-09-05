@@ -41,7 +41,7 @@ class EmployeeWorkspaceTest extends TestCase
 
         $this->getJson('/api/portfolio/dashboard')->assertForbidden();
         $this->getJson("/api/businesses/{$business->id}/team")->assertForbidden();
-        $this->getJson("/api/businesses/{$business->id}/expenses")->assertForbidden();
+        $this->getJson("/api/businesses/{$business->id}/expenses")->assertOk()->assertJsonCount(0, 'data');
         $this->getJson("/api/businesses/{$business->id}/reports/profit-loss")->assertForbidden();
     }
 
@@ -81,6 +81,10 @@ class EmployeeWorkspaceTest extends TestCase
             ->assertJsonPath('recent_invoices.0.seller_name', 'Employee One');
 
         $this->getJson("/api/businesses/{$business->id}/invoices")
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $this->getJson("/api/businesses/{$business->id}/invoices?mine=1")
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.creator.name', 'Employee One');

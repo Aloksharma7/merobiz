@@ -12,6 +12,7 @@ use App\Services\InvoiceService;
 use App\Services\PaymentService;
 use App\Services\ProfitClosingService;
 use App\Services\ProfitDistributionService;
+use App\Services\ProjectWriterAssignmentService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +47,7 @@ class DemoSeeder extends Seeder
                 [
                     'business' => [
                         'name' => 'Aimers AI', 'slug' => 'aimers-ai', 'code' => 'AAI',
-                        'business_type' => 'digital_subscription', 'invoice_prefix' => 'AAI',
+                        'business_type' => 'digital_subscription', 'category' => 'standard', 'product_type' => 'digital', 'invoice_prefix' => 'AAI',
                         'email' => 'billing@aimersai.test', 'phone' => '9801001001',
                         'address' => 'Kathmandu, Nepal', 'default_tax_rate' => 0,
                     ],
@@ -62,14 +63,14 @@ class DemoSeeder extends Seeder
                 [
                     'business' => [
                         'name' => 'TechChamp Software', 'slug' => 'techchamp-software', 'code' => 'TCS',
-                        'business_type' => 'service', 'invoice_prefix' => 'TCS',
+                        'business_type' => 'service', 'category' => 'standard', 'product_type' => 'digital', 'invoice_prefix' => 'TCS',
                         'email' => 'accounts@techchamp.test', 'phone' => '9801001002',
                         'address' => 'Lalitpur, Nepal', 'default_tax_rate' => 13,
                     ],
                     'owner_share' => 65,
                     'products' => [
                         ['sku' => 'WEB-BASIC', 'name' => 'Business Website', 'type' => 'service', 'unit' => 'project', 'sale_price' => 48000, 'cost_price' => 18000, 'tax_rate' => 13],
-                        ['sku' => 'APP-MVP', 'name' => 'Mobile App MVP', 'type' => 'service', 'unit' => 'project', 'sale_price' => 125000, 'cost_price' => 58000, 'tax_rate' => 13],
+                        ['sku' => 'APP-MVP', 'name' => 'Mobile App MVP', 'type' => 'service', 'unit' => 'project', 'sale_price' => 78000, 'cost_price' => 34000, 'tax_rate' => 13],
                         ['sku' => 'SUPPORT', 'name' => 'Monthly Support', 'type' => 'service', 'unit' => 'month', 'sale_price' => 15000, 'cost_price' => 4500, 'tax_rate' => 13],
                     ],
                     'customers' => ['Bara Agro Traders', 'Nepal Learning Network', 'Janaki Retail', 'Sagarmatha Logistics'],
@@ -78,7 +79,7 @@ class DemoSeeder extends Seeder
                 [
                     'business' => [
                         'name' => 'Enlighten Research', 'slug' => 'enlighten-research', 'code' => 'ERC',
-                        'business_type' => 'service', 'invoice_prefix' => 'ERC',
+                        'business_type' => 'service', 'category' => 'installment', 'invoice_prefix' => 'ERC',
                         'email' => 'finance@enlighten.test', 'phone' => '9801001003',
                         'address' => 'Kathmandu, Nepal', 'default_tax_rate' => 0,
                     ],
@@ -105,7 +106,7 @@ class DemoSeeder extends Seeder
                 ]);
 
                 $business->memberships()->createMany([
-                    ['user_id' => $owner->id, 'role' => BusinessRole::Owner, 'title' => 'Portfolio Owner', 'commission_rate' => 0, 'active' => true, 'joined_at' => now()->subYear()->toDateString()],
+                    ['user_id' => $owner->id, 'role' => BusinessRole::Owner, 'full_control' => true, 'title' => 'Portfolio Owner', 'commission_rate' => 0, 'active' => true, 'joined_at' => now()->subYear()->toDateString()],
                     ['user_id' => $admin->id, 'role' => BusinessRole::Admin, 'title' => 'Business Admin', 'commission_rate' => 0, 'active' => true, 'joined_at' => now()->subMonths(8)->toDateString()],
                 ]);
 
@@ -166,7 +167,11 @@ class DemoSeeder extends Seeder
                 ]));
 
                 $transactionEmployee = $business->code === 'TCS' ? $sales : $owner;
-                $this->seedTransactions($business, $owner, $admin, $transactionEmployee, $products->all(), $customers->all(), $definition['expense_categories'], $businessIndex);
+                $this->seedTransactions($business, $owner, $admin, $transactionEmployee, $products->all(), $customers->all(), $definition['expense_categories'], $businessIndex, seedInvoices: ! $business->isInstallment());
+
+                if ($business->code === 'ERC') {
+                    $this->seedProjects($business, $owner);
+                }
             }
 
             $lastMonthStart = CarbonImmutable::now()->subMonth()->startOfMonth();
@@ -195,12 +200,85 @@ class DemoSeeder extends Seeder
         });
     }
 
+    private function seedProjects(Business $business, User $owner): void
+    {
+        $writerAssignments = app(ProjectWriterAssignmentService::class);
+        $invoiceService = app(InvoiceService::class);
+        $paymentService = app(PaymentService::class);
+
+        $priya = $business->writers()->create(['name' => 'Priya Adhikari', 'phone' => '9802001001', 'email' => 'priya.writer@example.test', 'active' => true]);
+        $rajan = $business->writers()->create(['name' => 'Rajan Thapa', 'phone' => '9802001002', 'active' => true]);
+
+        $completed = $business->projects()->create([
+            'created_by' => $owner->id,
+            'client_name' => 'Sushant Basnet', 'client_phone' => '9803001001', 'client_email' => 'sushant@example.test',
+            'topic' => 'Impact of digital marketing on small retail businesses in Kathmandu valley',
+            'course' => 'MBA', 'work' => 'Thesis', 'work_status' => 'approved',
+            'deal_amount' => 45000, 'writer_payment_amount' => 15000,
+        ]);
+        $writerAssignments->assign($completed, $priya->id, CarbonImmutable::now()->subMonths(2), 'Initial assignment', $owner, $business);
+        $completedInvoice = $invoiceService->create($business, $owner, [
+            'project_id' => $completed->id,
+            'invoice_date' => CarbonImmutable::now()->subMonths(2)->toDateString(),
+            'status' => InvoiceStatus::Issued->value,
+            'discount_amount' => 0,
+            'items' => [[
+                'description' => 'Thesis writing — '.$completed->topic,
+                'quantity' => 1, 'unit_price' => 45000, 'unit_cost' => 0, 'discount_amount' => 0, 'tax_rate' => 0,
+            ]],
+        ]);
+        $paymentService->record($business, $completedInvoice, $owner, [
+            'payment_date' => CarbonImmutable::now()->subMonths(2)->addDays(2)->toDateString(), 'amount' => 20000,
+            'method' => PaymentMethod::BankTransfer->value, 'reference' => 'DEMO-PROJ-'.$completed->id.'-1', 'notes' => 'Advance payment',
+        ]);
+        $paymentService->record($business, $completedInvoice, $owner, [
+            'payment_date' => CarbonImmutable::now()->subMonth()->toDateString(), 'amount' => 25000,
+            'method' => PaymentMethod::BankTransfer->value, 'reference' => 'DEMO-PROJ-'.$completed->id.'-2', 'notes' => 'Final payment on submission',
+        ]);
+        $completed->profitApprovals()->create([
+            'business_id' => $business->id, 'approved_by' => $owner->id,
+            'approved_on' => CarbonImmutable::now()->subMonth()->toDateString(), 'amount' => 22000,
+            'notes' => 'Deal amount minus writer payment and printing costs.',
+        ]);
+
+        $inProgress = $business->projects()->create([
+            'created_by' => $owner->id,
+            'client_name' => 'Kiran Bhusal', 'client_phone' => '9803001002', 'client_email' => 'kiran@example.test',
+            'topic' => 'Data analysis of customer churn for telecom operators',
+            'course' => 'MSc Statistics', 'work' => 'Dissertation', 'work_status' => 'correction_ongoing',
+            'deal_amount' => 38000, 'writer_payment_amount' => 12000,
+        ]);
+        $writerAssignments->assign($inProgress, $rajan->id, CarbonImmutable::now()->subMonth(), 'Initial assignment', $owner, $business);
+        $inProgressInvoice = $invoiceService->create($business, $owner, [
+            'project_id' => $inProgress->id,
+            'invoice_date' => CarbonImmutable::now()->subMonth()->toDateString(),
+            'status' => InvoiceStatus::Issued->value,
+            'discount_amount' => 0,
+            'items' => [[
+                'description' => 'Dissertation support — '.$inProgress->topic,
+                'quantity' => 1, 'unit_price' => 38000, 'unit_cost' => 0, 'discount_amount' => 0, 'tax_rate' => 0,
+            ]],
+        ]);
+        $paymentService->record($business, $inProgressInvoice, $owner, [
+            'payment_date' => CarbonImmutable::now()->subMonth()->toDateString(), 'amount' => 15000,
+            'method' => PaymentMethod::Qr->value, 'reference' => 'DEMO-PROJ-'.$inProgress->id.'-1', 'notes' => 'Advance payment',
+        ]);
+
+        $business->projects()->create([
+            'created_by' => $owner->id,
+            'client_name' => 'Sarita Tamang', 'client_phone' => '9803001003',
+            'topic' => 'Financial literacy among rural cooperative members',
+            'course' => 'BBA', 'work' => 'Research report', 'work_status' => 'started',
+            'deal_amount' => 22000, 'writer_payment_amount' => 7000,
+        ]);
+    }
+
     /**
      * @param array<int, \App\Models\Product> $products
      * @param array<int, \App\Models\Customer> $customers
      * @param array<int, string> $expenseCategories
      */
-    private function seedTransactions(Business $business, User $owner, User $admin, User $sales, array $products, array $customers, array $expenseCategories, int $businessIndex): void
+    private function seedTransactions(Business $business, User $owner, User $admin, User $sales, array $products, array $customers, array $expenseCategories, int $businessIndex, bool $seedInvoices = true): void
     {
         $invoiceService = app(InvoiceService::class);
         $paymentService = app(PaymentService::class);
@@ -209,7 +287,7 @@ class DemoSeeder extends Seeder
         for ($monthOffset = 5; $monthOffset >= 0; $monthOffset--) {
             $month = $anchor->subMonths($monthOffset);
             $currentMonth = $month->isSameMonth(CarbonImmutable::now());
-            $days = $currentMonth ? [1] : [5, 14, 24];
+            $days = $seedInvoices ? ($currentMonth ? [1] : [5, 14, 24]) : [];
 
             foreach ($days as $dayIndex => $day) {
                 $date = $month->day(min($day, $month->daysInMonth));

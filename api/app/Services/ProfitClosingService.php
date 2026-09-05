@@ -18,8 +18,7 @@ class ProfitClosingService
     public function __construct(
         private readonly DashboardService $dashboard,
         private readonly AuditService $audit,
-    ) {
-    }
+    ) {}
 
     /** @param array<string, mixed> $data */
     public function close(Business $business, User $actor, array $data): ProfitPeriod

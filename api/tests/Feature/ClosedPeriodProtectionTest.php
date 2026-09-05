@@ -37,15 +37,16 @@ class ClosedPeriodProtectionTest extends TestCase
             'effective_from' => today()->subYear()->toDateString(),
         ]);
 
-        $closedDate = today()->subMonth()->startOfMonth();
+        $closedStart = today()->subMonth()->startOfMonth();
+        $closedEnd = $closedStart->copy()->endOfMonth();
         app(ProfitClosingService::class)->close($business, $owner, [
-            'start_date' => $closedDate->toDateString(),
-            'end_date' => $closedDate->endOfMonth()->toDateString(),
+            'start_date' => $closedStart->toDateString(),
+            'end_date' => $closedEnd->toDateString(),
         ]);
 
         $this->expectException(ValidationException::class);
         app(InvoiceService::class)->create($business, $owner, [
-            'invoice_date' => $closedDate->addDays(3)->toDateString(),
+            'invoice_date' => $closedStart->copy()->addDays(3)->toDateString(),
             'status' => 'issued',
             'discount_amount' => 0,
             'items' => [[

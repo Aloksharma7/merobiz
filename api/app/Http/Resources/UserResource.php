@@ -17,6 +17,7 @@ class UserResource extends JsonResource
             'phone' => $this->phone,
             'initials' => $this->initials,
             'preferred_currency' => $this->preferred_currency,
+            'workspace' => $this->resolveWorkspace(),
         ];
     }
 }

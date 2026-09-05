@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\BusinessCategory;
+use App\Enums\ProductBusinessType;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +18,7 @@ class Business extends Model
 
     /** @var array<int, string> */
     protected $fillable = [
-        'owner_id', 'name', 'slug', 'code', 'business_type', 'currency',
+        'owner_id', 'name', 'slug', 'code', 'business_type', 'category', 'product_type', 'currency',
         'pan_number', 'vat_number', 'phone', 'email', 'address',
         'invoice_prefix', 'invoice_next_number', 'payment_next_number',
         'default_tax_rate', 'status', 'settings',
@@ -25,6 +27,8 @@ class Business extends Model
     protected function casts(): array
     {
         return [
+            'category' => BusinessCategory::class,
+            'product_type' => ProductBusinessType::class,
             'invoice_next_number' => 'integer',
             'payment_next_number' => 'integer',
             'default_tax_rate' => 'decimal:2',
@@ -82,9 +86,34 @@ class Business extends Model
         return $this->hasMany(ProfitDistribution::class);
     }
 
+    public function profitWithdrawals(): HasMany
+    {
+        return $this->hasMany(ProfitWithdrawal::class);
+    }
+
     public function auditLogs(): HasMany
     {
         return $this->hasMany(AuditLog::class);
+    }
+
+    public function writers(): HasMany
+    {
+        return $this->hasMany(Writer::class);
+    }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    public function projectProfitApprovals(): HasMany
+    {
+        return $this->hasMany(ProjectProfitApproval::class);
+    }
+
+    public function isInstallment(): bool
+    {
+        return $this->category === BusinessCategory::Installment;
     }
 
     public function membershipFor(?User $user): ?BusinessMembership
@@ -93,7 +122,11 @@ class Business extends Model
             return null;
         }
 
-        return $this->memberships->firstWhere('user_id', $user->id);
+        if ($this->relationLoaded('memberships')) {
+            return $this->memberships->firstWhere('user_id', $user->id);
+        }
+
+        return $this->memberships()->where('user_id', $user->id)->first();
     }
 
     public function currentOwnershipFor(User $user, CarbonInterface|string|null $asOf = null): ?OwnershipPeriod
@@ -118,5 +151,10 @@ class Business extends Model
             ->whereDate('start_date', '<=', $value)
             ->whereDate('end_date', '>=', $value)
             ->exists();
+    }
+
+    public function hasFeature(string $key): bool
+    {
+        return (bool) data_get($this->settings, "features.{$key}", false);
     }
 }

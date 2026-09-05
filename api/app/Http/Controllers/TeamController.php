@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Enums\BusinessRole;
+use App\Enums\PayType;
 use App\Models\Business;
 use App\Models\BusinessMembership;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\DashboardService;
+use App\Services\SalaryService;
 use App\Support\AuthorizesBusinessActions;
 use App\Support\DateRange;
 use Illuminate\Http\JsonResponse;
@@ -21,9 +23,10 @@ class TeamController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly AuditService $audit)
-    {
-    }
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly SalaryService $salary,
+    ) {}
 
     public function index(Request $request, Business $business): JsonResponse
     {
@@ -45,6 +48,7 @@ class TeamController extends Controller
         $rows = $memberships->map(function (BusinessMembership $membership) use ($business, $range, $stats): array {
             $row = $stats->get($membership->user_id);
             $ownership = $business->currentOwnershipFor($membership->user, $range->end);
+            $salary = $this->salary->summaryFor($membership);
 
             return [
                 'id' => $membership->id,
@@ -55,6 +59,8 @@ class TeamController extends Controller
                 'phone' => $membership->user->phone,
                 'initials' => $membership->user->initials,
                 'role' => $membership->role->value,
+                'full_control' => $membership->full_control,
+                'is_founder' => $membership->user_id === $business->owner_id,
                 'title' => $membership->title,
                 'commission_rate' => (float) $membership->commission_rate,
                 'active' => $membership->active,
@@ -64,6 +70,11 @@ class TeamController extends Controller
                 'commission_earned' => round((float) ($row->commission ?? 0), 2),
                 'ownership_percent' => $ownership ? (float) $ownership->ownership_percent : 0.0,
                 'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
+                'pay_type' => $salary['pay_type'],
+                'salary_amount' => $salary['salary_amount'],
+                'salary_visible_to_staff' => $salary['salary_visible_to_staff'],
+                'salary_paid_total' => $salary['paid_total'],
+                'salary_pending' => $salary['pending'],
             ];
         });
 
@@ -80,14 +91,19 @@ class TeamController extends Controller
             'phone' => ['nullable', 'string', 'max:30'],
             'password' => ['nullable', 'string', 'min:8'],
             'role' => ['required', Rule::enum(BusinessRole::class)],
+            'full_control' => ['sometimes', 'boolean'],
             'title' => ['nullable', 'string', 'max:120'],
             'commission_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'pay_type' => ['sometimes', Rule::enum(PayType::class)],
+            'salary_amount' => ['sometimes', 'numeric', 'min:0'],
+            'salary_visible_to_staff' => ['sometimes', 'boolean'],
         ]);
 
         $role = BusinessRole::from($data['role']);
-        abort_unless($role !== BusinessRole::Owner || $actorMembership->role === BusinessRole::Owner, 403, 'Only the portfolio owner can assign the owner role.');
+        abort_unless($role !== BusinessRole::Owner || $actorMembership->full_control, 403, 'Only a full-control owner can assign the owner role.');
+        $fullControl = $role === BusinessRole::Owner && $actorMembership->full_control && ($data['full_control'] ?? false);
 
-        $membership = DB::transaction(function () use ($business, $data, $role): BusinessMembership {
+        $membership = DB::transaction(function () use ($business, $data, $role, $fullControl): BusinessMembership {
             $user = User::query()->where('email', mb_strtolower($data['email']))->first();
 
             if (! $user) {
@@ -109,13 +125,30 @@ class TeamController extends Controller
                 throw ValidationException::withMessages(['email' => 'This person is already a member of this business.']);
             }
 
+            if ($role === BusinessRole::Employee) {
+                $alreadyEmployedElsewhere = BusinessMembership::query()
+                    ->where('user_id', $user->id)
+                    ->where('role', BusinessRole::Employee->value)
+                    ->where('active', true)
+                    ->where('business_id', '!=', $business->id)
+                    ->exists();
+
+                if ($alreadyEmployedElsewhere) {
+                    throw ValidationException::withMessages(['role' => 'This person is already an active employee of another business.']);
+                }
+            }
+
             return $business->memberships()->create([
                 'user_id' => $user->id,
                 'role' => $role,
+                'full_control' => $fullControl,
                 'title' => $data['title'] ?? null,
                 'commission_rate' => $data['commission_rate'] ?? 0,
                 'active' => true,
                 'joined_at' => now()->toDateString(),
+                'pay_type' => $data['pay_type'] ?? PayType::Commission->value,
+                'salary_amount' => $data['salary_amount'] ?? 0,
+                'salary_visible_to_staff' => $data['salary_visible_to_staff'] ?? false,
             ]);
         });
 
@@ -131,6 +164,7 @@ class TeamController extends Controller
                 'name' => $membership->user->name,
                 'email' => $membership->user->email,
                 'role' => $membership->role->value,
+                'full_control' => $membership->full_control,
                 'title' => $membership->title,
                 'commission_rate' => (float) $membership->commission_rate,
                 'active' => $membership->active,
@@ -145,15 +179,39 @@ class TeamController extends Controller
 
         $data = $request->validate([
             'role' => ['sometimes', Rule::enum(BusinessRole::class)],
+            'full_control' => ['sometimes', 'boolean'],
             'title' => ['nullable', 'string', 'max:120'],
             'commission_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'active' => ['sometimes', 'boolean'],
+            'pay_type' => ['sometimes', Rule::enum(PayType::class)],
+            'salary_amount' => ['sometimes', 'numeric', 'min:0'],
+            'salary_visible_to_staff' => ['sometimes', 'boolean'],
         ]);
 
+        $isFounder = $membership->user_id === $business->owner_id;
+        $actorIsFounder = $request->user()->id === $business->owner_id;
+        abort_if($isFounder && ! $actorIsFounder && (
+            array_key_exists('active', $data) || array_key_exists('role', $data) || array_key_exists('full_control', $data)
+        ), 403, 'Only the person who created this business can change their own role, access or active status.');
+
         if (isset($data['role'])) {
-            $role = BusinessRole::from($data['role']);
-            abort_unless($role !== BusinessRole::Owner || $actorMembership->role === BusinessRole::Owner, 403, 'Only the portfolio owner can assign the owner role.');
-            $data['role'] = $role;
+            $data['role'] = BusinessRole::from($data['role']);
+        }
+
+        // Promoting someone to owner, demoting or deactivating an existing owner, and granting or
+        // revoking full control are all ownership-level changes: only a full-control owner may make them.
+        $targetIsOwner = $membership->role === BusinessRole::Owner;
+        $roleTouchesOwnership = isset($data['role']) && ($data['role'] === BusinessRole::Owner || $targetIsOwner);
+        $activeTouchesOwnership = array_key_exists('active', $data) && $targetIsOwner;
+        $touchesFullControl = array_key_exists('full_control', $data);
+
+        if ($roleTouchesOwnership || $activeTouchesOwnership || $touchesFullControl) {
+            abort_unless($actorMembership->full_control, 403, 'Only a full-control owner can change ownership-level access.');
+        }
+
+        if ($touchesFullControl) {
+            abort_if($isFounder && ! $data['full_control'], 422, 'The business founder always keeps full control.');
+            $data['full_control'] = $membership->role === BusinessRole::Owner && $data['full_control'];
         }
 
         $deactivating = array_key_exists('active', $data) && ! $data['active'] && $membership->active;
@@ -180,9 +238,13 @@ class TeamController extends Controller
                 'business_id' => $business->id,
                 'user_id' => $membership->user_id,
                 'role' => $membership->role->value,
+                'full_control' => $membership->full_control,
                 'title' => $membership->title,
                 'commission_rate' => (float) $membership->commission_rate,
                 'active' => $membership->active,
+                'pay_type' => $membership->pay_type->value,
+                'salary_amount' => (float) $membership->salary_amount,
+                'salary_visible_to_staff' => $membership->salary_visible_to_staff,
             ],
         ]);
     }

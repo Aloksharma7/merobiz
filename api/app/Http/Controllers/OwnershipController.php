@@ -8,6 +8,7 @@ use App\Models\Business;
 use App\Models\OwnershipPeriod;
 use App\Services\AuditService;
 use App\Support\AuthorizesBusinessActions;
+use App\Support\Decimal;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -19,9 +20,7 @@ class OwnershipController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly AuditService $audit)
-    {
-    }
+    public function __construct(private readonly AuditService $audit) {}
 
     public function index(Request $request, Business $business): JsonResponse
     {
@@ -51,7 +50,7 @@ class OwnershipController extends Controller
     public function store(StoreOwnershipRequest $request, Business $business): JsonResponse
     {
         $actorMembership = $this->membership($request);
-        abort_unless($actorMembership->role === BusinessRole::Owner, 403);
+        abort_unless($actorMembership->full_control, 403, 'Only a full-control owner can change ownership stakes.');
         $data = $request->validated();
 
         abort_unless($business->memberships()->where('user_id', $data['user_id'])->where('active', true)->exists(), 422, 'The selected partner must be an active business member.');
@@ -74,7 +73,7 @@ class OwnershipController extends Controller
             ]);
         }
 
-        $otherOwnership = (float) $business->ownerships()
+        $otherOwnership = $business->ownerships()
             ->where('user_id', '!=', $data['user_id'])
             ->whereDate('effective_from', '<=', $effectiveFrom->toDateString())
             ->where(function (Builder $query) use ($effectiveFrom): void {
@@ -82,7 +81,7 @@ class OwnershipController extends Controller
             })
             ->sum('ownership_percent');
 
-        $otherProfitShare = (float) $business->ownerships()
+        $otherProfitShare = $business->ownerships()
             ->where('user_id', '!=', $data['user_id'])
             ->whereDate('effective_from', '<=', $effectiveFrom->toDateString())
             ->where(function (Builder $query) use ($effectiveFrom): void {
@@ -90,10 +89,10 @@ class OwnershipController extends Controller
             })
             ->sum('profit_share_percent');
 
-        if ($otherOwnership + (float) $data['ownership_percent'] > 100.0001) {
+        if (Decimal::of($otherOwnership)->plus(Decimal::of($data['ownership_percent']))->isGreaterThan(100)) {
             throw ValidationException::withMessages(['ownership_percent' => 'Combined ownership cannot exceed 100%.']);
         }
-        if ($otherProfitShare + (float) $data['profit_share_percent'] > 100.0001) {
+        if (Decimal::of($otherProfitShare)->plus(Decimal::of($data['profit_share_percent']))->isGreaterThan(100)) {
             throw ValidationException::withMessages(['profit_share_percent' => 'Combined profit sharing cannot exceed 100%.']);
         }
 

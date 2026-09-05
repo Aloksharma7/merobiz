@@ -18,7 +18,8 @@ class StoreInvoiceRequest extends FormRequest
     {
         return [
             'customer_id' => ['nullable', 'integer'],
-            'customer_name' => ['nullable', 'string', 'max:150', 'required_without:customer_id'],
+            'project_id' => ['nullable', 'integer'],
+            'customer_name' => ['nullable', 'string', 'max:150', 'required_without_all:customer_id,project_id'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
             'customer_email' => ['nullable', 'email', 'max:190'],
             'customer_address' => ['nullable', 'string', 'max:500'],
@@ -36,6 +37,10 @@ class StoreInvoiceRequest extends FormRequest
             'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'items.*.discount_amount' => ['sometimes', 'numeric', 'min:0'],
             'items.*.tax_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'installments' => ['nullable', 'array', 'min:2'],
+            'installments.*.due_date' => ['required_with:installments', 'date', 'after_or_equal:invoice_date'],
+            'installments.*.amount' => ['required_with:installments', 'numeric', 'gt:0'],
+            'installments.*.notes' => ['nullable', 'string', 'max:120'],
         ];
     }
 }

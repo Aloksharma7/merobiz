@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\BusinessCategory;
 use App\Enums\BusinessRole;
 use App\Enums\InvoiceStatus;
 use App\Models\AuditLog;
@@ -11,6 +12,8 @@ use App\Models\Invoice;
 use App\Models\OwnershipPeriod;
 use App\Models\ProfitAllocation;
 use App\Models\ProfitDistribution;
+use App\Models\ProfitWithdrawal;
+use App\Models\ProjectProfitApproval;
 use App\Models\User;
 use App\Support\DateRange;
 use Carbon\CarbonImmutable;
@@ -67,6 +70,7 @@ class DashboardService
                 'name' => $business->name,
                 'code' => $business->code,
                 'business_type' => $business->business_type,
+                'is_installment' => $business->isInstallment(),
                 'currency' => $business->currency,
                 'status' => $business->status,
                 'my_role' => $membership->role->value,
@@ -74,6 +78,7 @@ class DashboardService
                 'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
                 'can_view_financials' => $canViewFinancials,
                 'metrics' => $metrics + ['attributable_profit' => $attributable],
+                'collected_this_month' => $this->collectedThisMonth($user->id, $business->id),
                 'change' => [
                     'net_sales' => $this->percentageChange($metrics['net_sales'], $previousMetrics['net_sales']),
                     'net_profit' => $this->percentageChange($metrics['net_profit'], $previousMetrics['net_profit']),
@@ -121,6 +126,8 @@ class DashboardService
             $summary['outstanding_profit'] = 0.0;
         }
 
+        $today = CarbonImmutable::now();
+
         return [
             'period' => $range->toArray(),
             'mode' => $portfolioMode,
@@ -129,11 +136,47 @@ class DashboardService
             'currencies' => $currencies,
             'mixed_currencies' => count($currencies) > 1,
             'summary' => $summary,
+            'month_to_date' => $this->portfolioQuickWindow($memberships, $user, $today->startOfMonth(), $today, $portfolioMode),
+            'profit_collected_this_month' => $this->collectedThisMonth($user->id),
             'businesses' => $businessRows,
             'trend' => $this->portfolioTrend($user, $memberships, $range->end),
             'top_sellers' => $this->topSellers($financialBusinessIds, $range->start, $range->end),
             'recent_activity' => $this->recentActivity($financialBusinessIds),
         ];
+    }
+
+    /** @param Collection<int, BusinessMembership> $memberships */
+    private function portfolioQuickWindow(Collection $memberships, User $user, CarbonInterface $start, CarbonInterface $end, string $mode): array
+    {
+        $sales = 0.0;
+        $profit = 0.0;
+
+        foreach ($memberships as $membership) {
+            $business = $membership->business;
+            $canViewFinancials = $membership->allows('dashboard.financial');
+            $creator = $canViewFinancials ? null : $user;
+            $metrics = $this->metrics($business, $start, $end, $creator);
+            $sales += $metrics['net_sales'];
+
+            if ($mode === 'owner') {
+                $profit += $canViewFinancials ? $this->attributableProfit($user, $business, $start, $end) : 0.0;
+            } elseif ($canViewFinancials) {
+                $profit += $metrics['net_profit'];
+            }
+        }
+
+        return ['sales' => round($sales, 2), 'profit' => round($profit, 2)];
+    }
+
+    private function collectedThisMonth(int $userId, ?int $businessId = null): float
+    {
+        $today = CarbonImmutable::now();
+
+        return (float) ProfitWithdrawal::query()
+            ->where('user_id', $userId)
+            ->when($businessId, fn ($query) => $query->where('business_id', $businessId))
+            ->whereBetween('withdrawn_on', [$today->startOfMonth()->toDateString(), $today->toDateString()])
+            ->sum('amount');
     }
 
     /** @return array<string, mixed> */
@@ -152,6 +195,12 @@ class DashboardService
             ? $this->attributableProfit($user, $business, $range->start, $range->end)
             : 0.0;
 
+        $today = CarbonImmutable::now();
+        $monthMetrics = $this->metrics($business, $today->startOfMonth(), $today, $creator);
+        if (! $canViewFinancials) {
+            $monthMetrics = $this->employeeSafeMetrics($monthMetrics);
+        }
+
         return [
             'period' => $range->toArray(),
             'mode' => $canViewFinancials ? 'financial' : 'personal',
@@ -161,10 +210,20 @@ class DashboardService
                 'code' => $business->code,
                 'currency' => $business->currency,
                 'business_type' => $business->business_type,
+                'category' => $business->category->value,
+                'is_installment' => $business->isInstallment(),
                 'my_role' => $membership->role->value,
+                'full_control' => $membership->full_control,
+                'is_founder' => $user->id === $business->owner_id,
                 'ownership_percent' => $ownership ? (float) $ownership->ownership_percent : 0.0,
                 'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
+                'dashboard_settings' => $this->dashboardSettings($business),
             ],
+            'owners' => $this->activeOwners($business, $canViewFinancials),
+            'month_to_date' => ['sales' => $monthMetrics['net_sales'], 'profit' => $monthMetrics['net_profit']],
+            'profit_collected_this_month' => $canViewFinancials && $membership->role === BusinessRole::Owner
+                ? $this->collectedThisMonth($user->id, $business->id)
+                : 0.0,
             'permissions' => [
                 'can_view_financials' => $canViewFinancials,
                 'can_manage_sales' => $membership->allows('sales.manage') || $membership->allows('sales.create'),
@@ -176,7 +235,7 @@ class DashboardService
                 'can_manage_team' => $membership->allows('team.manage'),
                 'can_view_reports' => $membership->allows('reports.view'),
                 'can_update_business' => $membership->allows('business.update'),
-                'can_manage_ownership' => $membership->role->value === 'owner',
+                'can_manage_ownership' => $membership->full_control,
             ],
             'summary' => $metrics + [
                 'attributable_profit' => round($attributable, 2),
@@ -209,12 +268,16 @@ class DashboardService
             $invoices->where('created_by', $creator->id);
         }
 
+        $isInstallment = $business->category === BusinessCategory::Installment;
+
         $subtotal = (float) (clone $invoices)->sum('subtotal');
         $discounts = (float) (clone $invoices)->sum('discount_amount');
         $tax = (float) (clone $invoices)->sum('tax_amount');
         $invoicedTotal = (float) (clone $invoices)->sum('total_amount');
-        $cost = (float) (clone $invoices)->sum('cost_amount');
-        $commissions = (float) (clone $invoices)->sum('commission_amount');
+        // Installment/project businesses don't recognize invoice cost and margin
+        // automatically — profit only counts once approved on the project.
+        $cost = $isInstallment ? 0.0 : (float) (clone $invoices)->sum('cost_amount');
+        $commissions = $isInstallment ? 0.0 : (float) (clone $invoices)->sum('commission_amount');
         $receivables = (float) (clone $invoices)->sum('balance_amount');
         $invoiceCount = (float) (clone $invoices)->count();
 
@@ -231,9 +294,11 @@ class DashboardService
             ->whereBetween('expense_date', [$start->toDateString(), $end->toDateString()])
             ->sum('amount');
 
+        $projectProfit = $creator ? 0.0 : $this->approvedProjectProfit($business, $start, $end);
+
         $netSales = $subtotal - $discounts;
-        $grossProfit = $netSales - $cost;
-        $netProfit = $grossProfit - $expenses - $commissions;
+        $grossProfit = $isInstallment ? 0.0 : ($netSales - $cost);
+        $netProfit = $grossProfit - $expenses - $commissions + $projectProfit;
 
         return [
             'net_sales' => round($netSales, 2),
@@ -243,12 +308,25 @@ class DashboardService
             'gross_profit' => round($grossProfit, 2),
             'expenses' => round($expenses, 2),
             'commissions' => round($commissions, 2),
+            'project_profit' => round($projectProfit, 2),
             'net_profit' => round($netProfit, 2),
             'cash_collected' => round($cashCollected, 2),
             'receivables' => round($receivables, 2),
             'invoice_count' => $invoiceCount,
             'average_invoice' => $invoiceCount > 0 ? round($invoicedTotal / $invoiceCount, 2) : 0.0,
         ];
+    }
+
+    private function approvedProjectProfit(Business $business, CarbonInterface $start, CarbonInterface $end): float
+    {
+        if ($business->category !== BusinessCategory::Installment) {
+            return 0.0;
+        }
+
+        return (float) ProjectProfitApproval::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('approved_on', [$start->toDateString(), $end->toDateString()])
+            ->sum('amount');
     }
 
     public function attributableProfit(User $user, Business $business, CarbonInterface $start, CarbonInterface $end): float
@@ -281,6 +359,52 @@ class DashboardService
         return round($total, 2);
     }
 
+    /** @var array<string, bool> */
+    private const DEFAULT_DASHBOARD_SETTINGS = [
+        'show_overview_cards' => true,
+        'show_profit_breakdown' => true,
+        'show_quick_actions' => true,
+        'show_performance_trend' => true,
+        'show_top_products' => true,
+        'show_recent_invoices' => true,
+        'show_expense_mix' => true,
+    ];
+
+    /** @return array<string, bool> */
+    private function dashboardSettings(Business $business): array
+    {
+        $stored = (array) data_get($business->settings, 'dashboard', []);
+
+        return array_merge(self::DEFAULT_DASHBOARD_SETTINGS, array_intersect_key($stored, self::DEFAULT_DASHBOARD_SETTINGS));
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function activeOwners(Business $business, bool $includeShares): array
+    {
+        $today = CarbonImmutable::now()->toDateString();
+
+        $periods = $business->ownerships()
+            ->whereDate('effective_from', '<=', $today)
+            ->where(function (Builder $query) use ($today): void {
+                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $today);
+            })
+            ->with('user:id,name')
+            ->orderByDesc('effective_from')
+            ->get()
+            ->unique('user_id');
+
+        $titles = $business->memberships()->where('role', BusinessRole::Owner->value)->pluck('title', 'user_id');
+
+        return $periods->map(fn (OwnershipPeriod $period): array => [
+            'user_id' => $period->user_id,
+            'name' => $period->user->name,
+            'initials' => $period->user->initials,
+            'title' => $titles->get($period->user_id),
+            'ownership_percent' => $includeShares ? (float) $period->ownership_percent : null,
+            'profit_share_percent' => $includeShares ? (float) $period->profit_share_percent : null,
+        ])->values()->all();
+    }
+
     /** @return array<string, float> */
     private function emptyMetrics(): array
     {
@@ -292,6 +416,7 @@ class DashboardService
             'gross_profit' => 0.0,
             'expenses' => 0.0,
             'commissions' => 0.0,
+            'project_profit' => 0.0,
             'net_profit' => 0.0,
             'cash_collected' => 0.0,
             'receivables' => 0.0,
@@ -307,6 +432,7 @@ class DashboardService
         $metrics['cost_of_sales'] = 0.0;
         $metrics['gross_profit'] = 0.0;
         $metrics['expenses'] = 0.0;
+        $metrics['project_profit'] = 0.0;
         $metrics['net_profit'] = 0.0;
 
         return $metrics;

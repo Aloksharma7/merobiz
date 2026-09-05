@@ -14,21 +14,23 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExpenseController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly AuditService $audit)
-    {
-    }
+    public function __construct(private readonly AuditService $audit) {}
 
     public function index(Request $request, Business $business): AnonymousResourceCollection
     {
-        $this->requirePermission($request, 'expenses.manage');
+        $membership = $this->membership($request);
+        $canManage = $membership->allows('expenses.manage');
+        abort_unless($canManage || $membership->allows('expenses.create'), 403);
 
         $expenses = $business->expenses()
             ->with(['submitter:id,name', 'approver:id,name'])
+            ->when(! $canManage, fn ($query) => $query->where('submitted_by', $request->user()->id))
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = trim((string) $request->query('search'));
                 $query->where(function ($nested) use ($search): void {
@@ -45,9 +47,53 @@ class ExpenseController extends Controller
         return ExpenseResource::collection($expenses);
     }
 
+    public function export(Request $request, Business $business): StreamedResponse
+    {
+        $this->requirePermission($request, 'expenses.manage');
+
+        $expenses = $business->expenses()
+            ->with(['submitter:id,name', 'approver:id,name'])
+            ->when($request->filled('search'), function ($query) use ($request): void {
+                $search = trim((string) $request->query('search'));
+                $query->where(function ($nested) use ($search): void {
+                    $nested->where('category', 'like', "%{$search}%")
+                        ->orWhere('vendor', 'like', "%{$search}%")
+                        ->orWhere('reference', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->filled('status') && $request->query('status') !== 'all', fn ($query) => $query->where('status', $request->query('status')))
+            ->latest('expense_date')
+            ->latest('id')
+            ->get();
+
+        $filename = 'expenses-'.$business->code.'-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($expenses): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Date', 'Category', 'Vendor', 'Method', 'Status', 'Amount', 'Tax', 'Submitted By', 'Approved By', 'Reference', 'Notes']);
+            foreach ($expenses as $expense) {
+                fputcsv($handle, [
+                    $expense->expense_date->format('Y-m-d'),
+                    $expense->category,
+                    $expense->vendor ?? '',
+                    $expense->payment_method->value,
+                    $expense->status->value,
+                    $expense->amount,
+                    $expense->tax_amount,
+                    $expense->submitter->name ?? '—',
+                    $expense->approver->name ?? '',
+                    $expense->reference ?? '',
+                    $expense->notes ?? '',
+                ]);
+            }
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
+    }
+
     public function store(StoreExpenseRequest $request, Business $business): JsonResponse
     {
-        $membership = $this->requirePermission($request, 'expenses.manage');
+        $membership = $this->membership($request);
+        abort_unless($membership->allows('expenses.manage') || $membership->allows('expenses.create'), 403);
         $data = $request->validated();
 
         if ($business->isDateClosed($data['expense_date'])) {
@@ -99,7 +145,12 @@ class ExpenseController extends Controller
 
     public function destroy(Request $request, Business $business, Expense $expense): JsonResponse
     {
-        $this->requirePermission($request, 'expenses.manage');
+        $membership = $this->membership($request);
+        $canManage = $membership->allows('expenses.manage');
+        $canDeleteOwnPending = $membership->allows('expenses.create')
+            && $expense->submitted_by === $request->user()->id
+            && $expense->status === ExpenseStatus::Pending;
+        abort_unless($canManage || $canDeleteOwnPending, 403);
         $this->assertBusiness($business, $expense);
 
         if ($business->isDateClosed($expense->expense_date)) {

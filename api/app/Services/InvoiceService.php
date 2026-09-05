@@ -6,20 +6,21 @@ use App\Enums\InvoiceStatus;
 use App\Enums\SaleVerificationStatus;
 use App\Models\Business;
 use App\Models\Invoice;
+use App\Models\PanInvoiceSequence;
 use App\Models\Product;
+use App\Models\Project;
 use App\Models\User;
 use App\Support\Decimal;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class InvoiceService
 {
-    public function __construct(private readonly AuditService $audit)
-    {
-    }
+    public function __construct(private readonly AuditService $audit) {}
 
     /** @param array<string, mixed> $data */
     public function create(Business $business, User $creator, array $data): Invoice
@@ -38,17 +39,30 @@ class InvoiceService
                 throw ValidationException::withMessages(['customer_id' => 'The selected customer does not belong to this business.']);
             }
 
+            $projectId = Arr::get($data, 'project_id');
+            /** @var Project|null $project */
+            $project = $projectId ? $lockedBusiness->projects()->whereKey($projectId)->first() : null;
+            if ($lockedBusiness->isInstallment() && ! $project) {
+                throw ValidationException::withMessages(['project_id' => 'Select a project for this sale — sales in this business are made against a project.']);
+            }
+            if ($projectId && ! $project) {
+                throw ValidationException::withMessages(['project_id' => 'The selected project does not belong to this business.']);
+            }
+
+            // A project always has a tracked customer — inherit it so payments recorded
+            // against the project's invoices show up in that customer's payment history.
+            if (! $customerId && $project?->customer_id) {
+                $customerId = $project->customer_id;
+            }
+
             // Customer details are snapshotted on the invoice. Staff may type a name
             // directly for one-off billing without creating a permanent customer first.
-            // If a saved customer is selected, its current details are used as defaults.
-            $customerName = trim((string) (Arr::get($data, 'customer_name') ?: $customer?->name ?: ''));
-            if ($customerName === '') {
-                throw ValidationException::withMessages(['customer_name' => 'Enter the customer name or choose a saved customer.']);
-            }
+            // If a saved customer or project is selected, its details are used as defaults.
+            $customerName = trim((string) (Arr::get($data, 'customer_name') ?: $customer?->name ?: $project?->client_name ?: 'Walk-in Customer'));
             $customerSnapshot = [
                 'customer_name' => $customerName,
-                'customer_phone' => Arr::get($data, 'customer_phone') ?: $customer?->phone,
-                'customer_email' => Arr::get($data, 'customer_email') ?: $customer?->email,
+                'customer_phone' => Arr::get($data, 'customer_phone') ?: $customer?->phone ?: $project?->client_phone,
+                'customer_email' => Arr::get($data, 'customer_email') ?: $customer?->email ?: $project?->client_email,
                 'customer_address' => Arr::get($data, 'customer_address') ?: $customer?->address,
                 'customer_pan_number' => Arr::get($data, 'customer_pan_number') ?: $customer?->pan_number,
             ];
@@ -62,21 +76,29 @@ class InvoiceService
             $preparedItems = $this->prepareItems($lockedBusiness, $data['items'], $canManageCatalogue);
             $totals = $this->calculateTotals($preparedItems, Arr::get($data, 'discount_amount', 0));
 
+            if ($project) {
+                $due = $project->dueAmount();
+                if (Decimal::of($totals['total_amount'])->isGreaterThan(Decimal::of($due)->plus(0.01))) {
+                    throw ValidationException::withMessages([
+                        'amount' => sprintf(
+                            'You tried to record %s, but only %s is still due on this project. Someone may have just recorded another payment — refresh and try again.',
+                            number_format((float) $totals['total_amount'], 2),
+                            number_format($due, 2),
+                        ),
+                    ]);
+                }
+            }
+
             $netSales = Decimal::of($totals['subtotal'])->minus(Decimal::of($totals['discount_amount']));
             $commission = $netSales
                 ->multipliedBy(Decimal::of($membership->commission_rate))
                 ->dividedBy(100, 2, RoundingMode::HalfUp);
 
-            $invoiceNumber = sprintf(
-                '%s-%06d',
-                mb_strtoupper($lockedBusiness->invoice_prefix),
-                $lockedBusiness->invoice_next_number
-            );
-
-            $lockedBusiness->increment('invoice_next_number');
+            $invoiceNumber = $this->nextInvoiceNumber($lockedBusiness);
 
             $invoice = $lockedBusiness->invoices()->create([
                 'customer_id' => $customerId,
+                'project_id' => $project?->id,
                 ...$customerSnapshot,
                 'created_by' => $creator->id,
                 'invoice_number' => $invoiceNumber,
@@ -119,11 +141,73 @@ class InvoiceService
                 }
             }
 
-            $invoice->load(['customer', 'creator', 'items.product', 'payments']);
+            if (! empty($data['installments'])) {
+                if (! $lockedBusiness->hasFeature('installments') && ! $lockedBusiness->isInstallment()) {
+                    throw ValidationException::withMessages(['installments' => 'Installment plans are not enabled for this business.']);
+                }
+                $this->createInstallments($invoice, $data['installments'], $totals['total_amount']);
+            }
+
+            $invoice->load(['customer', 'project', 'creator', 'items.product', 'payments', 'installments']);
             $this->audit->record($creator, $lockedBusiness, 'invoice.created', $invoice, null, $invoice->toArray());
 
             return $invoice;
         });
+    }
+
+    private function nextInvoiceNumber(Business $lockedBusiness): string
+    {
+        $panNumber = trim((string) $lockedBusiness->pan_number);
+        $sharesPan = $panNumber !== '' && Business::query()
+            ->where('pan_number', $panNumber)
+            ->where('id', '!=', $lockedBusiness->id)
+            ->exists();
+
+        if ($sharesPan) {
+            /** @var PanInvoiceSequence $sequence */
+            $sequence = PanInvoiceSequence::query()->lockForUpdate()->firstOrCreate(
+                ['pan_number' => $panNumber],
+                ['next_number' => 1],
+            );
+            $number = (string) $sequence->next_number;
+            $sequence->increment('next_number');
+
+            return $number;
+        }
+
+        $number = sprintf('%s-%06d', mb_strtoupper($lockedBusiness->invoice_prefix), $lockedBusiness->invoice_next_number);
+        $lockedBusiness->increment('invoice_next_number');
+
+        return $number;
+    }
+
+    /** @param array<int, array<string, mixed>> $installments */
+    private function createInstallments(Invoice $invoice, array $installments, string $totalAmount): void
+    {
+        $sum = BigDecimal::zero();
+        $rows = [];
+        $invoiceDate = $invoice->invoice_date->toDateString();
+
+        foreach ($installments as $index => $installment) {
+            if (CarbonImmutable::parse($installment['due_date'])->toDateString() < $invoiceDate) {
+                throw ValidationException::withMessages(['installments' => 'Each installment must be due on or after the invoice date.']);
+            }
+
+            $amount = Decimal::of($installment['amount']);
+            $sum = $sum->plus($amount);
+            $rows[] = [
+                'sequence' => $index + 1,
+                'due_date' => $installment['due_date'],
+                'amount' => Decimal::money($amount),
+                'notes' => $installment['notes'] ?? null,
+            ];
+        }
+
+        if (! $sum->isEqualTo(Decimal::of($totalAmount))) {
+            throw ValidationException::withMessages(['installments' => 'The installment amounts must add up to the invoice total.']);
+        }
+
+        $invoice->installments()->createMany($rows);
     }
 
     public function issue(Business $business, Invoice $invoice, User $actor): Invoice
@@ -191,7 +275,7 @@ class InvoiceService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $items
+     * @param  array<int, array<string, mixed>>  $items
      * @return array<int, array<string, mixed>>
      */
     private function prepareItems(Business $business, array $items, bool $canManageCatalogue): array
@@ -205,7 +289,7 @@ class InvoiceService
                 }
             }
 
-            if (! $product && ! $canManageCatalogue) {
+            if (! $product && ! $canManageCatalogue && ! $business->isInstallment()) {
                 throw ValidationException::withMessages([
                     'items' => 'Employees must select a product or service from the business catalogue.',
                 ]);
@@ -231,7 +315,7 @@ class InvoiceService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $items
+     * @param  array<int, array<string, mixed>>  $items
      * @return array<string, mixed>
      */
     private function calculateTotals(array $items, mixed $invoiceDiscount): array
@@ -337,9 +421,14 @@ class InvoiceService
     private function restoreInventory(Invoice $invoice): void
     {
         foreach ($invoice->items as $item) {
-            if ($item->product?->track_inventory) {
-                $item->product()->lockForUpdate()->first()?->increment('stock_quantity', (float) $item->quantity);
+            if (! $item->product?->track_inventory) {
+                continue;
             }
+
+            $lockedProduct = $item->product()->lockForUpdate()->first();
+            $lockedProduct?->update([
+                'stock_quantity' => Decimal::quantity(Decimal::of($lockedProduct->stock_quantity)->plus(Decimal::of($item->quantity))),
+            ]);
         }
     }
 

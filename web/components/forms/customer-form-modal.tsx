@@ -42,7 +42,10 @@ export function CustomerFormModal({ businessId, open, onClose, customer }: { bus
       return response.data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["customers", String(businessId)] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["customers", String(businessId)] }),
+        queryClient.invalidateQueries({ queryKey: ["customer", String(businessId)] }),
+      ]);
       toast.success(customer ? "Customer updated" : "Customer added");
       onClose();
     },
@@ -64,13 +67,13 @@ export function CustomerFormModal({ businessId, open, onClose, customer }: { bus
   return (
     <Modal open={open} onClose={onClose} title={customer ? "Edit customer" : "Add customer"} description="Only the name is required. Add billing details when they are available." footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="customer-form" loading={mutation.isPending}>Save customer</Button></>}>
       <form id="customer-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
-        <FieldShell label="Customer name" htmlFor="customer-name" error={errors.name?.[0]} required className="sm:col-span-2"><Input id="customer-name" value={form.name} onChange={(event) => update("name", event.target.value)} autoFocus required /></FieldShell>
-        <FieldShell label="Phone" htmlFor="customer-phone" error={errors.phone?.[0]}><Input id="customer-phone" value={form.phone} onChange={(event) => update("phone", event.target.value)} /></FieldShell>
-        <FieldShell label="Email" htmlFor="customer-email" error={errors.email?.[0]}><Input id="customer-email" type="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></FieldShell>
-        <FieldShell label="PAN number" htmlFor="customer-pan" error={errors.pan_number?.[0]}><Input id="customer-pan" value={form.pan_number} onChange={(event) => update("pan_number", event.target.value)} /></FieldShell>
-        <FieldShell label="Opening balance" htmlFor="opening-balance" error={errors.opening_balance?.[0]} hint="Optional"><Input id="opening-balance" type="number" min="0" step="0.01" value={form.opening_balance} onChange={(event) => update("opening_balance", event.target.value)} /></FieldShell>
-        <FieldShell label="Address" htmlFor="customer-address" error={errors.address?.[0]} className="sm:col-span-2"><Textarea id="customer-address" value={form.address} onChange={(event) => update("address", event.target.value)} /></FieldShell>
-        <FieldShell label="Notes" htmlFor="customer-notes" error={errors.notes?.[0]} className="sm:col-span-2"><Textarea id="customer-notes" value={form.notes} onChange={(event) => update("notes", event.target.value)} /></FieldShell>
+        <FieldShell label="Customer name" htmlFor="customer-name" error={errors.name?.[0]} required className="sm:col-span-2"><Input id="customer-name" value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="e.g. Ram Sharma or ABC Traders" autoFocus required /></FieldShell>
+        <FieldShell label="Phone" htmlFor="customer-phone" error={errors.phone?.[0]}><Input id="customer-phone" value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="98XXXXXXXX" /></FieldShell>
+        <FieldShell label="Email" htmlFor="customer-email" error={errors.email?.[0]}><Input id="customer-email" type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="name@example.com" /></FieldShell>
+        <FieldShell label="PAN number" htmlFor="customer-pan" error={errors.pan_number?.[0]}><Input id="customer-pan" value={form.pan_number} onChange={(event) => update("pan_number", event.target.value)} placeholder="PAN if applicable" /></FieldShell>
+        <FieldShell label="Opening balance" htmlFor="opening-balance" error={errors.opening_balance?.[0]} hint="Optional"><Input id="opening-balance" type="number" min="0" step="0.01" placeholder="0.00" value={form.opening_balance} onChange={(event) => update("opening_balance", event.target.value)} /></FieldShell>
+        <FieldShell label="Address" htmlFor="customer-address" error={errors.address?.[0]} className="sm:col-span-2"><Textarea id="customer-address" value={form.address} onChange={(event) => update("address", event.target.value)} placeholder="Street, city, ward or landmark" /></FieldShell>
+        <FieldShell label="Notes" htmlFor="customer-notes" error={errors.notes?.[0]} className="sm:col-span-2"><Textarea id="customer-notes" value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Preferences, billing terms, or anything worth remembering" /></FieldShell>
         {customer ? <label className="flex items-center gap-2.5 text-sm font-semibold sm:col-span-2"><input type="checkbox" checked={form.active} onChange={(event) => update("active", event.target.checked)} className="h-4 w-4 accent-[var(--brand)]" />Active customer</label> : null}
       </form>
     </Modal>

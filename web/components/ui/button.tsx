@@ -21,7 +21,7 @@ type LinkButtonProps = LinkProps & Omit<AnchorHTMLAttributes<HTMLAnchorElement>,
 function styles(variant: Variant, size: Size, className?: string) {
   return cn(
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl font-semibold transition-[transform,background-color,border-color,color,box-shadow,opacity] duration-150 ease-out active:translate-y-px active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:translate-y-0 disabled:active:scale-100",
-    variant === "primary" && "bg-[var(--brand)] text-white shadow-[0_8px_20px_rgb(19_95_72/0.2)] hover:bg-[var(--brand-deep)]",
+    variant === "primary" && "bg-[var(--brand)] text-[var(--on-brand)] shadow-[0_8px_20px_rgb(19_95_72/0.2)] hover:bg-[var(--brand-deep)] hover:text-[var(--on-brand-deep)]",
     variant === "secondary" && "border border-[var(--line-strong)] bg-white text-[var(--ink)] shadow-sm hover:border-[var(--brand)] hover:text-[var(--brand)]",
     variant === "ghost" && "bg-transparent text-[var(--ink-soft)] hover:bg-black/5 hover:text-[var(--ink)]",
     variant === "quiet" && "bg-[var(--brand-soft)] text-[var(--brand-deep)] hover:bg-[#d2e9df]",

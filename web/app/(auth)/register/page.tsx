@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { FieldShell, Input } from "@/components/ui/fields";
+import { FieldShell, Input, PasswordInput } from "@/components/ui/fields";
 import { fieldErrors } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
@@ -38,12 +38,12 @@ export default function RegisterPage() {
       <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] text-[var(--ink)]">Create your owner account</h1>
       <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">You can add businesses, partners and employees after signing in.</p>
       <form onSubmit={submit} className="mt-7 grid gap-4">
-        <FieldShell label="Full name" htmlFor="name" error={errors.name?.[0]} required><Input id="name" autoComplete="name" value={form.name} onChange={(event) => update("name", event.target.value)} required /></FieldShell>
-        <FieldShell label="Email address" htmlFor="register-email" error={errors.email?.[0]} required><Input id="register-email" type="email" autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} required /></FieldShell>
-        <FieldShell label="Phone number" htmlFor="phone" error={errors.phone?.[0]} hint="Optional"><Input id="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} /></FieldShell>
+        <FieldShell label="Full name" htmlFor="name" error={errors.name?.[0]} required><Input id="name" autoComplete="name" value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="e.g. Alok Sharma" required /></FieldShell>
+        <FieldShell label="Email address" htmlFor="register-email" error={errors.email?.[0]} required><Input id="register-email" type="email" autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="you@company.com" required /></FieldShell>
+        <FieldShell label="Phone number" htmlFor="phone" error={errors.phone?.[0]} hint="Optional"><Input id="phone" type="tel" autoComplete="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="98XXXXXXXX" /></FieldShell>
         <div className="grid gap-4 sm:grid-cols-2">
-          <FieldShell label="Password" htmlFor="new-password" error={errors.password?.[0]} required><Input id="new-password" type="password" autoComplete="new-password" minLength={8} value={form.password} onChange={(event) => update("password", event.target.value)} required /></FieldShell>
-          <FieldShell label="Confirm" htmlFor="confirm-password" required><Input id="confirm-password" type="password" autoComplete="new-password" minLength={8} value={form.password_confirmation} onChange={(event) => update("password_confirmation", event.target.value)} required /></FieldShell>
+          <FieldShell label="Password" htmlFor="new-password" error={errors.password?.[0]} required><PasswordInput id="new-password" autoComplete="new-password" minLength={8} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder="At least 8 characters" required /></FieldShell>
+          <FieldShell label="Confirm" htmlFor="confirm-password" required><PasswordInput id="confirm-password" autoComplete="new-password" minLength={8} value={form.password_confirmation} onChange={(event) => update("password_confirmation", event.target.value)} placeholder="Re-enter your password" required /></FieldShell>
         </div>
         <Button type="submit" size="lg" className="mt-2 w-full" loading={loading}>Create account</Button>
       </form>

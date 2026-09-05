@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProjectWorkStatus;
 use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Resources\CustomerResource;
 use App\Models\Business;
 use App\Models\Customer;
+use App\Models\Project;
 use App\Services\AuditService;
 use App\Support\AuthorizesBusinessActions;
 use Illuminate\Http\JsonResponse;
@@ -61,10 +63,82 @@ class CustomerController extends Controller
         ], 201);
     }
 
-    public function show(Request $request, Business $business, Customer $customer): CustomerResource
+    public function show(Request $request, Business $business, Customer $customer): JsonResponse
     {
+        $membership = $this->membership($request);
+        abort_unless($membership->allows('customers.view') || $membership->allows('customers.manage'), 403);
         $this->assertBusiness($business, $customer);
-        return new CustomerResource($customer);
+
+        $customer->loadSum(['invoices as outstanding_balance' => fn ($query) => $query
+            ->whereIn('status', ['issued', 'partial', 'overdue'])], 'balance_amount');
+
+        if ($business->isInstallment()) {
+            $projects = $customer->projects()
+                ->with(['writerAssignments' => fn ($query) => $query->whereNull('assigned_to')->with('writer')])
+                ->latest('id')
+                ->get();
+
+            $completed = $projects->filter(fn (Project $project) => $project->work_status === ProjectWorkStatus::Approved);
+
+            $payments = $customer->payments()
+                ->with('invoice.project:id,topic,course,work')
+                ->latest('payment_date')
+                ->limit(50)
+                ->get();
+
+            return response()->json([
+                'customer' => new CustomerResource($customer),
+                'stats' => [
+                    'total_projects' => $projects->count(),
+                    'completed_projects' => $completed->count(),
+                    'in_progress_projects' => $projects->count() - $completed->count(),
+                    'total_deal_amount' => round((float) $projects->sum('deal_amount'), 2),
+                    'total_collected' => round((float) $projects->sum(fn (Project $project) => $project->collectedAmount()), 2),
+                    'total_due' => round((float) $projects->sum(fn (Project $project) => $project->dueAmount()), 2),
+                ],
+                'projects' => $projects->map(fn (Project $project): array => [
+                    'id' => $project->id,
+                    'topic' => $project->topic,
+                    'course' => $project->course,
+                    'work' => $project->work,
+                    'work_status' => $project->work_status->value,
+                    'deal_amount' => (float) $project->deal_amount,
+                    'collected_amount' => round($project->collectedAmount(), 2),
+                    'due_amount' => round($project->dueAmount(), 2),
+                    'writer' => ($writer = $project->currentWriter()) ? ['id' => $writer->id, 'name' => $writer->name] : null,
+                ])->values(),
+                'payments' => $payments->map(fn ($payment): array => [
+                    'id' => $payment->id,
+                    'project_id' => $payment->invoice?->project_id,
+                    'project_topic' => $payment->invoice?->project?->topic,
+                    'amount' => (float) $payment->amount,
+                    'payment_date' => $payment->payment_date->toDateString(),
+                    'method' => $payment->method->value,
+                    'notes' => $payment->notes,
+                ])->values(),
+            ]);
+        }
+
+        $invoices = $customer->invoices()->with('creator:id,name')->latest('invoice_date')->limit(50)->get();
+
+        return response()->json([
+            'customer' => new CustomerResource($customer),
+            'stats' => [
+                'total_invoices' => $customer->invoices()->count(),
+                'total_invoiced' => round((float) $customer->invoices()->sum('total_amount'), 2),
+                'total_paid' => round((float) $customer->invoices()->sum('paid_amount'), 2),
+                'outstanding' => round((float) $customer->getAttribute('outstanding_balance'), 2),
+            ],
+            'invoices' => $invoices->map(fn ($invoice): array => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'invoice_date' => $invoice->invoice_date->toDateString(),
+                'status' => $invoice->status->value,
+                'total_amount' => (float) $invoice->total_amount,
+                'paid_amount' => (float) $invoice->paid_amount,
+                'balance_amount' => (float) $invoice->balance_amount,
+            ])->values(),
+        ]);
     }
 
     public function update(StoreCustomerRequest $request, Business $business, Customer $customer): JsonResponse

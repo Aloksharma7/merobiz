@@ -28,7 +28,7 @@ export function BusinessMark({ business, className, imageClassName, compact = fa
   }
 
   return (
-    <span className={cn("grid shrink-0 place-items-center rounded-xl bg-[var(--accent)] px-2 font-black text-[var(--brand-deep)]", compact ? "h-9 min-w-9 text-[10px]" : "h-12 min-w-12 text-xs", className)} aria-label={`${business.name} mark`}>
+    <span className={cn("grid shrink-0 place-items-center rounded-xl bg-[var(--accent)] px-2 font-black text-[var(--on-accent)]", compact ? "h-9 min-w-9 text-[10px]" : "h-12 min-w-12 text-xs", className)} aria-label={`${business.name} mark`}>
       {initials}
     </span>
   );

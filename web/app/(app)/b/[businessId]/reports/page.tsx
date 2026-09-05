@@ -45,7 +45,7 @@ export default function ReportsPage() {
 
   const allocations = useMemo<ProfitAllocation[]>(() => periods.data?.data.flatMap((period) => period.allocations ?? []) ?? [], [periods.data]);
   const outstandingAllocations = allocations.filter((row) => row.remaining_amount > 0);
-  const canClose = business ? ["owner", "admin", "accountant"].includes(business.my_role) : false;
+  const canClose = business ? ["owner", "admin"].includes(business.my_role) : false;
   const allocated = allocations.reduce((sum, row) => sum + row.allocated_amount, 0);
   const distributed = allocations.reduce((sum, row) => sum + row.distributed_amount, 0);
   const outstanding = allocations.reduce((sum, row) => sum + row.remaining_amount, 0);
@@ -90,8 +90,8 @@ export default function ReportsPage() {
             <ProfitLine label="Gross profit" value={report.gross_profit} currency={currency} subtotal />
             <ProfitLine label="Approved operating expenses" value={-report.expenses} currency={currency} subdued />
             <ProfitLine label="Employee commissions" value={-report.commissions} currency={currency} subdued />
-            <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--brand-deep)] px-4 py-4 text-white">
-              <div><p className="text-xs font-semibold text-white/60">Business net profit</p><p className="mt-1 text-[11px] text-white/45">Before partner distribution</p></div>
+            <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--brand-deep)] px-4 py-4 text-[var(--on-brand-deep)]">
+              <div><p className="text-xs font-semibold text-[var(--on-brand-deep)]/60">Business net profit</p><p className="mt-1 text-[11px] text-[var(--on-brand-deep)]/45">Before partner distribution</p></div>
               <p className="text-xl font-black tracking-[-0.03em]">{money(report.net_profit, currency)}</p>
             </div>
             <div className="mt-4 flex items-start gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4 text-sm leading-6 text-[var(--ink-soft)]">
@@ -148,12 +148,15 @@ export default function ReportsPage() {
       <Card className="overflow-hidden">
         <CardHeader title="Profit payouts" description="Money actually paid against finalized partner allocations." />
         {distributions.data?.data.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Date</th><th className="px-4 py-3 font-bold">Partner</th><th className="px-4 py-3 font-bold">Method</th><th className="px-4 py-3 font-bold">Reference</th><th className="px-5 py-3 text-right font-bold">Amount</th></tr></thead>
-              <tbody className="divide-y divide-[var(--line)]">{distributions.data.data.map((row) => <tr key={row.id} className="hover:bg-[var(--surface-soft)]"><td className="px-5 py-3.5 font-semibold">{prettyDate(row.distribution_date)}</td><td className="px-4 py-3.5"><p className="font-bold">{row.user_name || "Partner"}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">Recorded by {row.recorded_by || "—"}</p></td><td className="px-4 py-3.5"><Badge>{humanize(row.method)}</Badge></td><td className="px-4 py-3.5 text-[var(--ink-soft)]">{row.reference || "—"}</td><td className="px-5 py-3.5 text-right font-black">{money(row.amount, currency)}</td></tr>)}</tbody>
-            </table>
-          </div>
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Date</th><th className="px-4 py-3 font-bold">Partner</th><th className="px-4 py-3 font-bold">Method</th><th className="px-4 py-3 font-bold">Reference</th><th className="px-5 py-3 text-right font-bold">Amount</th></tr></thead>
+                <tbody className="divide-y divide-[var(--line)]">{distributions.data.data.map((row) => <tr key={row.id} className="hover:bg-[var(--surface-soft)]"><td className="px-5 py-3.5 font-semibold">{prettyDate(row.distribution_date)}</td><td className="px-4 py-3.5"><p className="font-bold">{row.user_name || "Partner"}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">Recorded by {row.recorded_by || "—"}</p></td><td className="px-4 py-3.5"><Badge>{humanize(row.method)}</Badge></td><td className="px-4 py-3.5 text-[var(--ink-soft)]">{row.reference || "—"}</td><td className="px-5 py-3.5 text-right font-black">{money(row.amount, currency)}</td></tr>)}</tbody>
+              </table>
+            </div>
+            <div className="divide-y divide-[var(--line)] md:hidden">{distributions.data.data.map((row) => <div key={row.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold">{row.user_name || "Partner"}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{prettyDate(row.distribution_date)} · Recorded by {row.recorded_by || "—"}</p></div><Badge>{humanize(row.method)}</Badge></div><div className="mt-3 flex items-center justify-between"><p className="text-xs text-[var(--ink-soft)]">{row.reference || "No reference"}</p><p className="text-lg font-black">{money(row.amount, currency)}</p></div></div>)}</div>
+          </>
         ) : <EmptyState icon={Banknote} title="No profit payouts recorded" description="Payouts appear here after money is paid against a closed-period partner allocation." />}
       </Card>
 
@@ -164,7 +167,7 @@ export default function ReportsPage() {
 }
 
 function ReportMetric({ label, value, note, icon: Icon, emphasis = false }: { label: string; value: string; note: string; icon: typeof ReceiptText; emphasis?: boolean }) {
-  return <Card className={emphasis ? "border-[var(--brand)] bg-[var(--brand-deep)] text-white" : "p-0"}><div className="flex h-full min-h-32 items-start gap-4 p-5"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${emphasis ? "bg-white/10 text-[var(--accent)]" : "bg-[var(--brand-soft)] text-[var(--brand)]"}`}><Icon size={19} /></span><div className="min-w-0"><p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${emphasis ? "text-white/55" : "text-[var(--ink-soft)]"}`}>{label}</p><p className="mt-2 truncate text-xl font-black tracking-[-0.035em]">{value}</p><p className={`mt-1.5 text-xs ${emphasis ? "text-white/55" : "text-[var(--ink-soft)]"}`}>{note}</p></div></div></Card>;
+  return <Card className={emphasis ? "border-[var(--brand)] bg-[var(--brand-deep)] text-[var(--on-brand-deep)]" : "p-0"}><div className="flex h-full min-h-32 items-start gap-4 p-5"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${emphasis ? "bg-[var(--on-brand-deep)]/10 text-[var(--accent)]" : "bg-[var(--brand-soft)] text-[var(--brand)]"}`}><Icon size={19} /></span><div className="min-w-0"><p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${emphasis ? "text-[var(--on-brand-deep)]/55" : "text-[var(--ink-soft)]"}`}>{label}</p><p className="mt-2 truncate text-xl font-black tracking-[-0.035em]">{value}</p><p className={`mt-1.5 text-xs ${emphasis ? "text-[var(--on-brand-deep)]/55" : "text-[var(--ink-soft)]"}`}>{note}</p></div></div></Card>;
 }
 
 function ProfitLine({ label, value, currency, strong = false, subdued = false, subtotal = false }: { label: string; value: number; currency: string; strong?: boolean; subdued?: boolean; subtotal?: boolean }) {

@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\BusinessCategory;
+use App\Enums\ProductBusinessType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,6 +20,8 @@ class StoreBusinessRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:180'],
             'code' => ['nullable', 'string', 'max:20'],
+            'category' => ['required', Rule::enum(BusinessCategory::class)],
+            'product_type' => ['required_if:category,standard', 'nullable', Rule::enum(ProductBusinessType::class)],
             'business_type' => ['required', Rule::in(['product', 'service', 'digital_subscription', 'mixed'])],
             'currency' => ['nullable', 'string', 'size:3'],
             'pan_number' => ['nullable', 'string', 'max:30'],

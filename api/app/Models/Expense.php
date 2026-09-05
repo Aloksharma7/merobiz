@@ -22,7 +22,7 @@ class Expense extends Model
     {
         return [
             'status' => ExpenseStatus::class,
-            'expense_date' => 'date',
+            'expense_date' => 'date:Y-m-d',
             'amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
             'approved_at' => 'datetime',

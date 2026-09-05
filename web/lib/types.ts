@@ -62,11 +62,17 @@ export type BusinessBrandingSettings = {
   show_logo_invoice?: boolean;
 };
 
+export type BusinessFeatureSettings = {
+  installments?: boolean;
+};
+
 export type BusinessSettings = {
   country?: string;
   number_format?: string;
+  features?: BusinessFeatureSettings;
   branding?: BusinessBrandingSettings;
   invoice?: InvoiceBusinessSettings;
+  dashboard?: Partial<DashboardLayoutSettings>;
   [key: string]: unknown;
 };
 
@@ -76,6 +82,9 @@ export type Business = {
   slug: string;
   code: string;
   business_type: BusinessType;
+  category: "standard" | "installment";
+  product_type: "digital" | "physical" | null;
+  is_installment: boolean;
   currency: string;
   pan_number?: string | null;
   vat_number?: string | null;
@@ -87,6 +96,8 @@ export type Business = {
   status: string;
   settings: BusinessSettings;
   my_role: BusinessRole;
+  full_control: boolean;
+  is_founder: boolean;
   permissions: string[];
   ownership_percent: number;
   profit_share_percent: number;
@@ -108,6 +119,63 @@ export type Customer = {
   created_at: string;
 };
 
+export type CustomerProjectRow = {
+  id: number;
+  topic: string;
+  course: string;
+  work: string;
+  work_status: ProjectWorkStatus;
+  deal_amount: number;
+  collected_amount: number;
+  due_amount: number;
+  writer: { id: number; name: string } | null;
+};
+
+export type CustomerInvoiceRow = {
+  id: number;
+  invoice_number: string;
+  invoice_date: string;
+  status: InvoiceStatus;
+  total_amount: number;
+  paid_amount: number;
+  balance_amount: number;
+};
+
+export type CustomerPaymentRow = {
+  id: number;
+  project_id: number | null;
+  project_topic: string | null;
+  amount: number;
+  payment_date: string;
+  method: string;
+  notes: string | null;
+};
+
+export type CustomerProjectProfile = {
+  customer: Customer;
+  stats: {
+    total_projects: number;
+    completed_projects: number;
+    in_progress_projects: number;
+    total_deal_amount: number;
+    total_collected: number;
+    total_due: number;
+  };
+  projects: CustomerProjectRow[];
+  payments: CustomerPaymentRow[];
+};
+
+export type CustomerInvoiceProfile = {
+  customer: Customer;
+  stats: {
+    total_invoices: number;
+    total_invoiced: number;
+    total_paid: number;
+    outstanding: number;
+  };
+  invoices: CustomerInvoiceRow[];
+};
+
 export type ProductType = "product" | "service" | "digital_subscription";
 export type Product = {
   id: number;
@@ -124,7 +192,121 @@ export type Product = {
   reorder_level: number;
   active: boolean;
   metadata: Record<string, unknown>;
+  allows_multiple_writers: boolean;
   created_at: string;
+};
+
+export type Writer = {
+  id: number;
+  business_id: number;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+export type WriterProjectRow = {
+  id: number;
+  client_name: string;
+  topic: string;
+  course: string;
+  work: string;
+  work_status: ProjectWorkStatus;
+  writer_payment_amount: number;
+  writer_paid_amount: number;
+  writer_due_amount: number | null;
+  is_current: boolean;
+  assigned_from?: string | null;
+  assigned_to?: string | null;
+};
+
+export type WriterPaymentRow = {
+  id: number;
+  project_id: number;
+  client_name?: string | null;
+  paid_on: string;
+  amount: number;
+  notes?: string | null;
+};
+
+export type WriterProfile = {
+  writer: Writer;
+  period: { start: string; end: string; label: string };
+  stats: {
+    total_projects: number;
+    current_projects: number;
+    total_agreed: number;
+    total_paid: number;
+    total_due: number;
+    period_paid: number;
+  };
+  payments: WriterPaymentRow[];
+  projects: WriterProjectRow[];
+};
+
+export type WriterAssignment = {
+  id: number;
+  writer: { id: number; name: string };
+  assigned_from: string;
+  assigned_to?: string | null;
+  current: boolean;
+  notes?: string | null;
+};
+
+export type ProjectWorkStatus =
+  | "started"
+  | "first_draft"
+  | "send_draft"
+  | "correction_ongoing"
+  | "waiting_for_feedback"
+  | "submitted"
+  | "approved";
+
+export type ProjectInvoiceSummary = {
+  id: number;
+  invoice_number: string;
+  invoice_date: string;
+  status: InvoiceStatus;
+  total_amount: number;
+  paid_amount: number;
+  balance_amount: number;
+};
+
+export type ProjectProfitApproval = {
+  id: number;
+  approved_on: string;
+  amount: number;
+  notes?: string | null;
+};
+
+export type Project = {
+  id: number;
+  business_id: number;
+  customer_id?: number | null;
+  client_name: string;
+  client_phone?: string | null;
+  client_email?: string | null;
+  started_on?: string | null;
+  topic: string;
+  course: string;
+  work: string;
+  work_status: ProjectWorkStatus;
+  deadline?: string | null;
+  deal_amount: number;
+  writer_payment_amount: number;
+  collected_amount: number;
+  due_amount: number;
+  writer_paid_amount: number;
+  writer_due_amount: number;
+  approved_profit_total: number | null;
+  current_writer: { id: number; name: string; assigned_from: string } | null;
+  created_by: number;
+  created_at: string;
+  invoices?: ProjectInvoiceSummary[];
+  profit_approvals?: ProjectProfitApproval[] | null;
+  writer_history?: WriterAssignment[];
 };
 
 export type Payment = {
@@ -153,6 +335,18 @@ export type InvoiceItem = {
   line_total: number;
 };
 
+export type InstallmentStatus = "paid" | "partial" | "overdue" | "pending";
+export type InvoiceInstallment = {
+  id: number;
+  sequence: number;
+  due_date: string;
+  amount: number;
+  paid_amount: number;
+  remaining_amount: number;
+  status: InstallmentStatus;
+  notes?: string | null;
+};
+
 export type InvoiceStatus = "draft" | "issued" | "partial" | "paid" | "overdue" | "cancelled" | "refunded";
 export type Invoice = {
   id: number;
@@ -167,6 +361,8 @@ export type Invoice = {
   customer_address?: string | null;
   customer_pan_number?: string | null;
   customer?: Pick<Customer, "id" | "name" | "phone" | "email" | "pan_number" | "address"> | null;
+  project_id?: number | null;
+  project?: { id: number; client_name: string } | null;
   creator?: { id: number; name: string; initials: string };
   subtotal: number;
   discount_amount: number;
@@ -203,6 +399,7 @@ export type Expense = {
   created_at: string;
 };
 
+export type PayType = "commission" | "fixed_salary";
 export type Member = {
   id: number;
   business_id: number;
@@ -212,6 +409,8 @@ export type Member = {
   phone?: string | null;
   initials: string;
   role: BusinessRole;
+  full_control: boolean;
+  is_founder: boolean;
   title?: string | null;
   commission_rate: number;
   active: boolean;
@@ -221,7 +420,34 @@ export type Member = {
   commission_earned: number;
   ownership_percent: number;
   profit_share_percent: number;
+  pay_type: PayType;
+  salary_amount: number;
+  salary_visible_to_staff: boolean;
+  salary_paid_total: number;
+  salary_pending: number;
 };
+
+export type SalaryPaymentRecord = {
+  id: number;
+  payment_date: string;
+  amount: number;
+  method: PaymentMethod;
+  reference?: string | null;
+  notes?: string | null;
+  recorded_by?: string | null;
+};
+
+export type SalarySummary = {
+  pay_type: PayType;
+  salary_amount: number;
+  salary_visible_to_staff?: boolean;
+  months_elapsed: number;
+  accrued: number;
+  paid_total: number;
+  pending: number;
+};
+
+export type MySalary = { visible: false } | ({ visible: true } & SalarySummary);
 
 export type ProfitAllocation = {
   id: number;
@@ -312,6 +538,8 @@ export type PortfolioDashboard = {
   currencies: string[];
   mixed_currencies: boolean;
   summary: MetricSummary;
+  month_to_date: { sales: number; profit: number };
+  profit_collected_this_month: number;
   businesses: Array<{
     id: number;
     name: string;
@@ -324,11 +552,22 @@ export type PortfolioDashboard = {
     profit_share_percent: number;
     can_view_financials: boolean;
     metrics: MetricSummary;
+    collected_this_month: number;
     change: { net_sales: number; net_profit: number };
   }>;
   trend: TrendPoint[];
   top_sellers: SellerRow[];
   recent_activity: Array<{ id: number; action: string; label: string; user_name?: string | null; business_name?: string | null; business_code?: string | null; created_at: string }>;
+};
+
+export type DashboardLayoutSettings = {
+  show_overview_cards: boolean;
+  show_profit_breakdown: boolean;
+  show_quick_actions: boolean;
+  show_performance_trend: boolean;
+  show_top_products: boolean;
+  show_recent_invoices: boolean;
+  show_expense_mix: boolean;
 };
 
 export type BusinessDashboard = {
@@ -341,9 +580,15 @@ export type BusinessDashboard = {
     currency: string;
     business_type: string;
     my_role: BusinessRole;
+    full_control: boolean;
+    is_founder: boolean;
     ownership_percent: number;
     profit_share_percent: number;
+    dashboard_settings: DashboardLayoutSettings;
   };
+  owners: Array<{ user_id: number; name: string; initials: string; title?: string | null; ownership_percent: number | null; profit_share_percent: number | null }>;
+  month_to_date: { sales: number; profit: number };
+  profit_collected_this_month: number;
   permissions: Record<string, boolean>;
   summary: MetricSummary;
   trend: TrendPoint[];
@@ -351,6 +596,52 @@ export type BusinessDashboard = {
   top_products: Array<{ name: string; quantity: number; sales: number }>;
   expense_categories: Array<{ category: string; total: number }>;
   recent_invoices: Array<{ id: number; invoice_number: string; invoice_date: string; customer_name: string; seller_name: string; status: InvoiceStatus; total_amount: number; balance_amount: number }>;
+};
+
+export type IncomeSourceType = "bank" | "salary" | "investment" | "other";
+
+export type PersonalIncomeSource = {
+  id: number;
+  name: string;
+  type: IncomeSourceType;
+  notes?: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+export type PersonalIncomeEntry = {
+  id: number;
+  source: { id: number; name: string; type: IncomeSourceType } | null;
+  entry_date: string;
+  amount: number;
+  notes?: string | null;
+  created_at: string;
+};
+
+export type PersonalExpense = {
+  id: number;
+  category: string;
+  vendor?: string | null;
+  expense_date: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  notes?: string | null;
+  created_at: string;
+};
+
+export type PersonalOverview = {
+  period: { start: string; end: string; label: string };
+  reporting_currency: string;
+  summary: {
+    business_profit_received: number;
+    other_income: number;
+    total_income: number;
+    total_expenses: number;
+    net_balance: number;
+  };
+  recent_profit: Array<{ id: number; business_name?: string | null; currency?: string | null; amount: number; withdrawn_on: string }>;
+  recent_income: Array<{ id: number; source_name?: string | null; amount: number; entry_date: string }>;
+  recent_expenses: Array<{ id: number; category: string; vendor?: string | null; amount: number; expense_date: string }>;
 };
 
 export type Paginated<T> = {

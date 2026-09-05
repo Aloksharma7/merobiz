@@ -20,7 +20,7 @@ class BusinessIsolationTest extends TestCase
 
         $assigned = $this->business($member, 'Assigned Company', 'ASSIGNED');
         $unassigned = $this->business($otherOwner, 'Private Company', 'PRIVATE');
-        $assigned->memberships()->create(['user_id' => $member->id, 'role' => BusinessRole::Salesperson, 'active' => true]);
+        $assigned->memberships()->create(['user_id' => $member->id, 'role' => BusinessRole::Employee, 'active' => true]);
 
         Sanctum::actingAs($member);
 
@@ -32,7 +32,7 @@ class BusinessIsolationTest extends TestCase
         $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner2@example.test', 'password' => 'password']);
         $salesperson = User::query()->create(['name' => 'Sales', 'email' => 'sales@example.test', 'password' => 'password']);
         $business = $this->business($owner, 'Sales Company', 'SALES');
-        $business->memberships()->create(['user_id' => $salesperson->id, 'role' => BusinessRole::Salesperson, 'active' => true]);
+        $business->memberships()->create(['user_id' => $salesperson->id, 'role' => BusinessRole::Employee, 'active' => true]);
 
         Sanctum::actingAs($salesperson);
 

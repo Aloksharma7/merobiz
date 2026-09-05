@@ -17,13 +17,14 @@ enum BusinessRole: string
                 'business.view', 'business.update', 'dashboard.financial',
                 'customers.manage', 'products.manage', 'sales.manage',
                 'payments.manage', 'expenses.manage', 'expenses.approve',
-                'team.manage', 'reports.view',
+                'team.manage', 'reports.view', 'writers.manage',
             ],
             self::Employee => [
                 'business.view', 'dashboard.personal',
                 'customers.manage', 'products.view',
-                'sales.create', 'sales.view_own',
+                'sales.create', 'sales.view_own', 'sales.view',
                 'payments.view', 'payments.record_own',
+                'expenses.create', 'writers.manage',
             ],
         };
     }

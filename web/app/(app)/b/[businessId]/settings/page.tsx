@@ -9,11 +9,12 @@ import { ErrorState } from "@/components/ui/error-state";
 import { PageLoading } from "@/components/ui/loading";
 import { PageHeader } from "@/components/ui/page-header";
 import { api, apiError, fieldErrors } from "@/lib/api";
+import { readableTextColor } from "@/lib/branding";
 import { useBusinesses } from "@/lib/business-context";
 import type { ApiMessage, Business, BusinessType, Member, OwnershipRecord } from "@/lib/types";
 import { number, prettyDate } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, CalendarClock, Eye, FileText, Landmark, Palette, Percent, Plus, Save, ShieldCheck, SlidersHorizontal, Trash2, Upload, UsersRound } from "lucide-react";
+import { Building2, CalendarClock, Eye, FileText, Landmark, LayoutDashboard, Palette, Percent, Plus, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, Trash2, Upload, UsersRound } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -30,6 +31,14 @@ type FormState = {
   address: string;
   invoice_prefix: string;
   default_tax_rate: string;
+  feature_installments: boolean;
+  dash_overview_cards: boolean;
+  dash_profit_breakdown: boolean;
+  dash_quick_actions: boolean;
+  dash_performance_trend: boolean;
+  dash_top_products: boolean;
+  dash_recent_invoices: boolean;
+  dash_expense_mix: boolean;
   brand_tagline: string;
   brand_primary_color: string;
   brand_nav_color: string;
@@ -83,6 +92,14 @@ function toForm(business: Business): FormState {
     address: business.address ?? "",
     invoice_prefix: business.invoice_prefix,
     default_tax_rate: String(business.default_tax_rate),
+    feature_installments: business.settings?.features?.installments ?? false,
+    dash_overview_cards: business.settings?.dashboard?.show_overview_cards ?? true,
+    dash_profit_breakdown: business.settings?.dashboard?.show_profit_breakdown ?? true,
+    dash_quick_actions: business.settings?.dashboard?.show_quick_actions ?? true,
+    dash_performance_trend: business.settings?.dashboard?.show_performance_trend ?? true,
+    dash_top_products: business.settings?.dashboard?.show_top_products ?? true,
+    dash_recent_invoices: business.settings?.dashboard?.show_recent_invoices ?? true,
+    dash_expense_mix: business.settings?.dashboard?.show_expense_mix ?? true,
     brand_tagline: business.settings?.branding?.tagline ?? "",
     brand_primary_color: business.settings?.branding?.primary_color ?? "#135f48",
     brand_nav_color: business.settings?.branding?.nav_color ?? "#0b3c31",
@@ -135,6 +152,7 @@ export default function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const owner = business?.my_role === "owner";
+  const canManageOwnership = business?.full_control ?? false;
 
   useEffect(() => { if (business) setForm(toForm(business)); }, [business]);
 
@@ -153,6 +171,8 @@ export default function SettingsPage() {
     mutationFn: async () => {
       if (!form) throw new Error("Business settings are not ready.");
       const {
+        feature_installments,
+        dash_overview_cards, dash_profit_breakdown, dash_quick_actions, dash_performance_trend, dash_top_products, dash_recent_invoices, dash_expense_mix,
         brand_tagline, brand_primary_color, brand_nav_color, brand_accent_color, show_logo_workspace, show_logo_invoice,
         website, invoice_terms, invoice_note, bank_name, bank_account_name, bank_account_number, bank_branch, authorized_name, authorized_title,
         show_seller_address, show_seller_phone, show_seller_email, show_seller_website, show_seller_pan,
@@ -171,6 +191,18 @@ export default function SettingsPage() {
         email: form.email || null,
         address: form.address || null,
         settings: {
+          features: {
+            installments: feature_installments,
+          },
+          dashboard: {
+            show_overview_cards: dash_overview_cards,
+            show_profit_breakdown: dash_profit_breakdown,
+            show_quick_actions: dash_quick_actions,
+            show_performance_trend: dash_performance_trend,
+            show_top_products: dash_top_products,
+            show_recent_invoices: dash_recent_invoices,
+            show_expense_mix: dash_expense_mix,
+          },
           branding: {
             tagline: brand_tagline || null,
             primary_color: brand_primary_color,
@@ -281,19 +313,60 @@ export default function SettingsPage() {
           <Card>
             <CardHeader title={<span className="flex items-center gap-2"><Building2 size={18} className="text-[var(--brand)]" />Business identity</span>} description="Shown across dashboards, invoices and reports." />
             <CardBody className="space-y-4">
+              <div className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-xs leading-5 text-[var(--ink-soft)]">
+                <span className="font-bold text-[var(--ink)]">{business.is_installment ? "Installment / project-based business" : "Standard business"}</span>
+                {business.product_type ? <span> · {business.product_type === "physical" ? "Physical products (stock tracked)" : "Digital products (no stock tracking)"}</span> : null}
+                <span className="block mt-0.5">Set when the business was created and can&apos;t be changed here.</span>
+              </div>
               <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_150px]">
-                <FieldShell label="Business name" htmlFor="business-name" error={errors.name?.[0]} required><Input id="business-name" value={form.name} onChange={(event) => update("name", event.target.value)} required /></FieldShell>
-                <FieldShell label="Short code" htmlFor="business-code" hint="Max 12" error={errors.code?.[0]} required><Input id="business-code" value={form.code} onChange={(event) => update("code", event.target.value.toUpperCase())} maxLength={12} required /></FieldShell>
+                <FieldShell label="Business name" htmlFor="business-name" error={errors.name?.[0]} required><Input id="business-name" value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="e.g. Aimers AI" required /></FieldShell>
+                <FieldShell label="Short code" htmlFor="business-code" hint="Max 12" error={errors.code?.[0]} required><Input id="business-code" value={form.code} onChange={(event) => update("code", event.target.value.toUpperCase())} maxLength={12} placeholder="e.g. AAI" required /></FieldShell>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <FieldShell label="Business model" htmlFor="business-type" error={errors.business_type?.[0]} required><Select id="business-type" value={form.business_type} onChange={(event) => update("business_type", event.target.value as BusinessType)}><option value="product">Physical products</option><option value="service">Services</option><option value="digital_subscription">Digital subscriptions</option><option value="mixed">Mixed business</option></Select></FieldShell>
-                <FieldShell label="Currency" htmlFor="business-currency" error={errors.currency?.[0]} required><Input id="business-currency" value={form.currency} onChange={(event) => update("currency", event.target.value.toUpperCase())} maxLength={3} required /></FieldShell>
+                <FieldShell label="Currency" htmlFor="business-currency" error={errors.currency?.[0]} required><Input id="business-currency" value={form.currency} onChange={(event) => update("currency", event.target.value.toUpperCase())} maxLength={3} placeholder="NPR" required /></FieldShell>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FieldShell label="Contact phone" htmlFor="business-phone" error={errors.phone?.[0]}><Input id="business-phone" value={form.phone} onChange={(event) => update("phone", event.target.value)} /></FieldShell>
-                <FieldShell label="Contact email" htmlFor="business-email" error={errors.email?.[0]}><Input id="business-email" type="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></FieldShell>
+                <FieldShell label="Contact phone" htmlFor="business-phone" error={errors.phone?.[0]}><Input id="business-phone" value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="98XXXXXXXX" /></FieldShell>
+                <FieldShell label="Contact email" htmlFor="business-email" error={errors.email?.[0]}><Input id="business-email" type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="billing@company.com" /></FieldShell>
               </div>
-              <FieldShell label="Business address" htmlFor="business-address" error={errors.address?.[0]}><Textarea id="business-address" className="min-h-20" value={form.address} onChange={(event) => update("address", event.target.value)} /></FieldShell>
+              <FieldShell label="Business address" htmlFor="business-address" error={errors.address?.[0]}><Textarea id="business-address" className="min-h-20" value={form.address} onChange={(event) => update("address", event.target.value)} placeholder="Street, city, ward or landmark" /></FieldShell>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title={<span className="flex items-center gap-2"><ToggleLeft size={18} className="text-[var(--brand)]" />Workflow features</span>} description="Turn on only what this specific business needs. Off by default for a simple, uncluttered workflow." />
+            <CardBody className="space-y-3">
+              <label className="flex items-start gap-3 rounded-2xl border border-[var(--line)] p-4">
+                <input type="checkbox" checked={form.feature_installments} onChange={(event) => update("feature_installments", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+                <span>
+                  <span className="block text-sm font-bold">Installment plans</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-[var(--ink-soft)]">Allow a sale to be split into a down payment and scheduled later payments instead of one full amount. Leave off for simple full/partial payments.</span>
+                </span>
+              </label>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title={<span className="flex items-center gap-2"><LayoutDashboard size={18} className="text-[var(--brand)]" />Dashboard layout</span>} description="Choose which sections appear on this business's dashboard. The owner profile and today/month figures at the top are always shown." />
+            <CardBody className="space-y-3">
+              {([
+                ["dash_overview_cards", "Overview cards", "The profit, net sales, cash collected and receivables cards for the selected date range."],
+                ["dash_profit_breakdown", "Profit breakdown", "Gross profit, expenses, commissions and net profit row (owners and admins only)."],
+                ["dash_quick_actions", "Quick actions", "Shortcut tiles for new sale, add expense, add customer and add item."],
+                ["dash_performance_trend", "Performance trend", "The sales and profit chart over the last six months."],
+                ["dash_top_products", "Top products & services", "Best-selling items ranked by net item sales."],
+                ["dash_recent_invoices", "Recent invoices", "The latest sales activity table."],
+                ["dash_expense_mix", "Expense mix", "Approved costs by category (or the commission panel for employees)."],
+              ] as const).map(([key, label, description]) => (
+                <label key={key} className="flex items-start gap-3 rounded-2xl border border-[var(--line)] p-4">
+                  <input type="checkbox" checked={form[key]} onChange={(event) => update(key, event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+                  <span>
+                    <span className="block text-sm font-bold">{label}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-[var(--ink-soft)]">{description}</span>
+                  </span>
+                </label>
+              ))}
             </CardBody>
           </Card>
 
@@ -315,11 +388,11 @@ export default function SettingsPage() {
                 <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[var(--ink-soft)]">Live identity preview</p>
                   <div className="mt-3 overflow-hidden rounded-2xl border border-black/5 shadow-sm" style={{ backgroundColor: form.brand_nav_color }}>
-                    <div className="flex items-center gap-3 p-4 text-white">
+                    <div className="flex items-center gap-3 p-4" style={{ color: /^#[0-9A-Fa-f]{6}$/.test(form.brand_nav_color) ? readableTextColor(form.brand_nav_color) : "#ffffff" }}>
                       <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/95 p-1.5 text-xs font-black" style={{ color: form.brand_nav_color }}>
                         {(logoPreview || business.settings?.branding?.logo_url) ? <img src={logoPreview || business.settings?.branding?.logo_url || ""} alt="Logo preview" className="h-full w-full object-contain" /> : business.code.slice(0, 4)}
                       </span>
-                      <div className="min-w-0"><p className="truncate font-black">{form.name || business.name}</p><p className="mt-0.5 truncate text-xs text-white/60">{form.brand_tagline || "Business workspace"}</p></div>
+                      <div className="min-w-0"><p className="truncate font-black">{form.name || business.name}</p><p className="mt-0.5 truncate text-xs opacity-60">{form.brand_tagline || "Business workspace"}</p></div>
                     </div>
                     <div className="h-1.5" style={{ backgroundColor: form.brand_accent_color }} />
                   </div>
@@ -344,12 +417,12 @@ export default function SettingsPage() {
             <CardHeader title={<span className="flex items-center gap-2"><FileText size={18} className="text-[var(--brand)]" />Invoice defaults</span>} description="Applied automatically when staff create a sale; they can focus on the customer and items." />
             <CardBody className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FieldShell label="Invoice prefix" htmlFor="invoice-prefix" hint="Example: AZ" error={errors.invoice_prefix?.[0]} required><Input id="invoice-prefix" value={form.invoice_prefix} onChange={(event) => update("invoice_prefix", event.target.value.toUpperCase())} maxLength={12} required /></FieldShell>
-                <FieldShell label="Default tax rate" htmlFor="default-tax" hint="Percent" error={errors.default_tax_rate?.[0]} required><Input id="default-tax" type="number" min="0" max="100" step="0.01" value={form.default_tax_rate} onChange={(event) => update("default_tax_rate", event.target.value)} required /></FieldShell>
+                <FieldShell label="Invoice prefix" htmlFor="invoice-prefix" hint="Example: AZ" error={errors.invoice_prefix?.[0]} required><Input id="invoice-prefix" value={form.invoice_prefix} onChange={(event) => update("invoice_prefix", event.target.value.toUpperCase())} maxLength={12} placeholder="e.g. AZ" required /></FieldShell>
+                <FieldShell label="Default tax rate" htmlFor="default-tax" hint="Percent" error={errors.default_tax_rate?.[0]} required><Input id="default-tax" type="number" min="0" max="100" step="0.01" placeholder="e.g. 13" value={form.default_tax_rate} onChange={(event) => update("default_tax_rate", event.target.value)} required /></FieldShell>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FieldShell label="PAN number" htmlFor="pan-number" error={errors.pan_number?.[0]}><Input id="pan-number" value={form.pan_number} onChange={(event) => update("pan_number", event.target.value)} /></FieldShell>
-                <FieldShell label="VAT number" htmlFor="vat-number" error={errors.vat_number?.[0]}><Input id="vat-number" value={form.vat_number} onChange={(event) => update("vat_number", event.target.value)} /></FieldShell>
+                <FieldShell label="PAN number" htmlFor="pan-number" hint="Businesses sharing this PAN share one invoice sequence" error={errors.pan_number?.[0]}><Input id="pan-number" value={form.pan_number} onChange={(event) => update("pan_number", event.target.value)} placeholder="e.g. 301234567" /></FieldShell>
+                <FieldShell label="VAT number" htmlFor="vat-number" error={errors.vat_number?.[0]}><Input id="vat-number" value={form.vat_number} onChange={(event) => update("vat_number", event.target.value)} placeholder="e.g. 600123456" /></FieldShell>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <FieldShell label="Website" htmlFor="invoice-website" error={errors["settings.invoice.website"]?.[0]}><Input id="invoice-website" value={form.website} onChange={(event) => update("website", event.target.value)} placeholder="www.example.com" /></FieldShell>
@@ -357,10 +430,10 @@ export default function SettingsPage() {
               </div>
               <FieldShell label="Authorized title" htmlFor="authorized-title" error={errors["settings.invoice.authorized_title"]?.[0]}><Input id="authorized-title" value={form.authorized_title} onChange={(event) => update("authorized_title", event.target.value)} placeholder="e.g. Authorized Signatory" /></FieldShell>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FieldShell label="Bank name" htmlFor="bank-name" error={errors["settings.invoice.bank_name"]?.[0]}><Input id="bank-name" value={form.bank_name} onChange={(event) => update("bank_name", event.target.value)} /></FieldShell>
-                <FieldShell label="Bank branch" htmlFor="bank-branch" error={errors["settings.invoice.bank_branch"]?.[0]}><Input id="bank-branch" value={form.bank_branch} onChange={(event) => update("bank_branch", event.target.value)} /></FieldShell>
-                <FieldShell label="Account name" htmlFor="bank-account-name" error={errors["settings.invoice.bank_account_name"]?.[0]}><Input id="bank-account-name" value={form.bank_account_name} onChange={(event) => update("bank_account_name", event.target.value)} /></FieldShell>
-                <FieldShell label="Account number" htmlFor="bank-account-number" error={errors["settings.invoice.bank_account_number"]?.[0]}><Input id="bank-account-number" value={form.bank_account_number} onChange={(event) => update("bank_account_number", event.target.value)} /></FieldShell>
+                <FieldShell label="Bank name" htmlFor="bank-name" error={errors["settings.invoice.bank_name"]?.[0]}><Input id="bank-name" value={form.bank_name} onChange={(event) => update("bank_name", event.target.value)} placeholder="e.g. Nabil Bank" /></FieldShell>
+                <FieldShell label="Bank branch" htmlFor="bank-branch" error={errors["settings.invoice.bank_branch"]?.[0]}><Input id="bank-branch" value={form.bank_branch} onChange={(event) => update("bank_branch", event.target.value)} placeholder="e.g. New Road" /></FieldShell>
+                <FieldShell label="Account name" htmlFor="bank-account-name" error={errors["settings.invoice.bank_account_name"]?.[0]}><Input id="bank-account-name" value={form.bank_account_name} onChange={(event) => update("bank_account_name", event.target.value)} placeholder="Account holder name" /></FieldShell>
+                <FieldShell label="Account number" htmlFor="bank-account-number" error={errors["settings.invoice.bank_account_number"]?.[0]}><Input id="bank-account-number" value={form.bank_account_number} onChange={(event) => update("bank_account_number", event.target.value)} placeholder="Account number" /></FieldShell>
               </div>
               <FieldShell label="Invoice note" htmlFor="invoice-note" hint="Short note shown near totals" error={errors["settings.invoice.invoice_note"]?.[0]}><Textarea id="invoice-note" className="min-h-20" value={form.invoice_note} onChange={(event) => update("invoice_note", event.target.value)} placeholder="Thank you for your business." /></FieldShell>
               <FieldShell label="Terms & conditions" htmlFor="invoice-terms" hint="Printed at the bottom of customer invoices" error={errors["settings.invoice.invoice_terms"]?.[0]}><Textarea id="invoice-terms" className="min-h-24" value={form.invoice_terms} onChange={(event) => update("invoice_terms", event.target.value)} placeholder="Payment due within 7 days. Goods/services once accepted are subject to the agreed return/refund policy." /></FieldShell>
@@ -432,7 +505,7 @@ export default function SettingsPage() {
 
           {owner ? (
             <Card>
-              <CardHeader title={<span className="flex items-center gap-2"><Percent size={18} className="text-[var(--brand)]" />Ownership schedule</span>} description="Ownership and profit sharing may differ by agreement." action={<Button size="sm" variant="quiet" leftIcon={<Plus size={15} />} onClick={(event) => { event.preventDefault(); setOwnershipOpen(true); }}>Change</Button>} />
+              <CardHeader title={<span className="flex items-center gap-2"><Percent size={18} className="text-[var(--brand)]" />Ownership schedule</span>} description={canManageOwnership ? "Ownership and profit sharing may differ by agreement." : "Only a full-control owner can change ownership stakes."} action={canManageOwnership ? <Button size="sm" variant="quiet" leftIcon={<Plus size={15} />} onClick={(event) => { event.preventDefault(); setOwnershipOpen(true); }}>Change</Button> : undefined} />
               <CardBody className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-2xl bg-[var(--surface-soft)] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Current ownership</p><p className="mt-1.5 text-xl font-black">{number(totalOwnership, 2)}%</p></div>
@@ -448,7 +521,7 @@ export default function SettingsPage() {
         </div>
       </form>
 
-      {owner ? <OwnershipFormModal businessId={businessId} open={ownershipOpen} onClose={() => setOwnershipOpen(false)} members={team.data ?? []} /> : null}
+      {canManageOwnership ? <OwnershipFormModal businessId={businessId} open={ownershipOpen} onClose={() => setOwnershipOpen(false)} members={team.data ?? []} /> : null}
     </div>
   );
 }

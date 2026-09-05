@@ -14,15 +14,18 @@ import {
   Building2,
   ChevronDown,
   ContactRound,
+  FolderKanban,
   Gauge,
   LayoutDashboard,
   LogOut,
   Menu,
+  PenTool,
   Plus,
   ReceiptText,
   Settings,
   Sparkles,
   UsersRound,
+  Wallet2,
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +34,12 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 type NavItem = { label: string; href: string; icon: LucideIcon; permission?: string; exact?: boolean };
+
+const EMPLOYEE_ALLOWED_PATH_SEGMENTS = ["/sales", "/expenses", "/customers", "/catalog", "/projects", "/writers"];
+
+function isEmployeePathAllowed(pathname: string, base: string) {
+  return pathname === base || EMPLOYEE_ALLOWED_PATH_SEGMENTS.some((segment) => pathname.startsWith(`${base}${segment}`));
+}
 
 function isActive(pathname: string, item: NavItem) {
   return item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -46,8 +55,8 @@ function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string;
       className={cn(
         "group flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition",
         active
-          ? "bg-white text-[var(--brand-deep)] shadow-[0_8px_24px_rgb(4_31_23/0.14)]"
-          : "text-white/68 hover:bg-white/8 hover:text-white",
+          ? "bg-white text-[var(--ink)] shadow-[0_8px_24px_rgb(4_31_23/0.14)]"
+          : "text-[var(--on-brand-deep)]/68 hover:bg-white/8 hover:text-[var(--on-brand-deep)]",
       )}
       aria-current={active ? "page" : undefined}
     >
@@ -108,17 +117,13 @@ function Shell({ children }: { children: ReactNode }) {
     if (businessesLoading || !employeeWorkspace || !assignedBusinessId) return;
 
     const base = `/b/${assignedBusinessId}`;
-    const allowed = pathname === base
-      || pathname.startsWith(`${base}/sales`)
-      || pathname.startsWith(`${base}/customers`)
-      || pathname.startsWith(`${base}/catalog`);
-
-    if (!allowed) router.replace(base);
+    if (!isEmployeePathAllowed(pathname, base)) router.replace(base);
   }, [assignedBusinessId, businessesLoading, employeeWorkspace, pathname, router]);
 
   const portfolioNav: NavItem[] = employeeWorkspace ? [] : [
     { label: "Overview", href: "/", icon: LayoutDashboard, exact: true },
     { label: "Businesses", href: "/businesses", icon: Building2 },
+    { label: "Personal", href: "/personal", icon: Wallet2 },
   ];
 
   const businessNav = useMemo<NavItem[]>(() => {
@@ -126,9 +131,12 @@ function Shell({ children }: { children: ReactNode }) {
     if (employeeWorkspace) {
       return [
         { label: "Home", href: `/b/${businessNavId}`, icon: Gauge, exact: true },
-        { label: "My sales & invoices", href: `/b/${businessNavId}/sales`, icon: ReceiptText, permission: "sales.create" },
+        { label: "Sales & invoices", href: `/b/${businessNavId}/sales`, icon: ReceiptText, permission: "sales.create" },
+        { label: "Expenses", href: `/b/${businessNavId}/expenses`, icon: WalletCards, permission: "expenses.manage" },
         { label: "Customers", href: `/b/${businessNavId}/customers`, icon: ContactRound, permission: "customers.view" },
         { label: "Products & services", href: `/b/${businessNavId}/catalog`, icon: Boxes, permission: "products.view" },
+        { label: "Projects", href: `/b/${businessNavId}/projects`, icon: FolderKanban, permission: "writers.manage" },
+        { label: "Writers", href: `/b/${businessNavId}/writers`, icon: PenTool, permission: "writers.manage" },
       ];
     }
 
@@ -138,6 +146,8 @@ function Shell({ children }: { children: ReactNode }) {
       { label: "Expenses", href: `/b/${businessNavId}/expenses`, icon: WalletCards, permission: "expenses.manage" },
       { label: "Customers", href: `/b/${businessNavId}/customers`, icon: ContactRound, permission: "customers.view" },
       { label: "Products & services", href: `/b/${businessNavId}/catalog`, icon: Boxes, permission: "products.view" },
+      { label: "Projects", href: `/b/${businessNavId}/projects`, icon: FolderKanban, permission: "writers.manage" },
+      { label: "Writers", href: `/b/${businessNavId}/writers`, icon: PenTool, permission: "writers.manage" },
       { label: "Team", href: `/b/${businessNavId}/team`, icon: UsersRound, permission: "team.view" },
       { label: "Reports & profit", href: `/b/${businessNavId}/reports`, icon: BarChart3, permission: "reports.view" },
       { label: "Settings", href: `/b/${businessNavId}/settings`, icon: Settings, permission: "business.update" },
@@ -147,9 +157,11 @@ function Shell({ children }: { children: ReactNode }) {
   const visibleBusinessNav = businessNav.filter((item) => {
     if (!item.permission || !activeBusiness) return true;
     if (item.permission === "sales.create") return can(activeBusiness, "sales.create") || can(activeBusiness, "sales.manage") || can(activeBusiness, "sales.view");
+    if (item.permission === "expenses.manage") return can(activeBusiness, "expenses.manage") || can(activeBusiness, "expenses.create");
     if (item.permission === "customers.view") return can(activeBusiness, "customers.view") || can(activeBusiness, "customers.manage");
-    if (item.permission === "products.view") return can(activeBusiness, "products.view") || can(activeBusiness, "products.manage");
+    if (item.permission === "products.view") return (can(activeBusiness, "products.view") || can(activeBusiness, "products.manage")) && !activeBusiness.is_installment;
     if (item.permission === "team.view") return can(activeBusiness, "team.view") || can(activeBusiness, "team.manage");
+    if (item.permission === "writers.manage") return can(activeBusiness, "writers.manage") && Boolean(activeBusiness.is_installment);
     return can(activeBusiness, item.permission);
   });
 
@@ -181,7 +193,7 @@ function Shell({ children }: { children: ReactNode }) {
 
   const canCreateSale = Boolean(activeBusiness && (can(activeBusiness, "sales.create") || can(activeBusiness, "sales.manage")));
   const salesHref = canCreateSale && activeBusiness ? `/b/${activeBusiness.id}/sales?new=1` : employeeWorkspace && assignedBusiness ? `/b/${assignedBusiness.id}/sales` : "/businesses";
-  const canSeeExpenses = Boolean(activeBusiness && can(activeBusiness, "expenses.manage"));
+  const canSeeExpenses = Boolean(activeBusiness && (can(activeBusiness, "expenses.manage") || can(activeBusiness, "expenses.create")));
   const fourthMobileHref = canSeeExpenses && activeBusiness
     ? `/b/${activeBusiness.id}/expenses`
     : activeBusiness
@@ -194,12 +206,7 @@ function Shell({ children }: { children: ReactNode }) {
   const shouldShowSwitcher = !employeeWorkspace && (businesses.length > 1 || Boolean(activeBusiness));
 
   const employeeBase = assignedBusinessId ? `/b/${assignedBusinessId}` : null;
-  const employeePathAllowed = !employeeWorkspace || Boolean(employeeBase && (
-    pathname === employeeBase
-      || pathname.startsWith(`${employeeBase}/sales`)
-      || pathname.startsWith(`${employeeBase}/customers`)
-      || pathname.startsWith(`${employeeBase}/catalog`)
-  ));
+  const employeePathAllowed = !employeeWorkspace || Boolean(employeeBase && isEmployeePathAllowed(pathname, employeeBase));
 
   if (businessesLoading || (employeeWorkspace && (!assignedBusiness || !employeePathAllowed))) {
     return <div className="grid min-h-screen place-items-center text-sm font-semibold text-[var(--ink-soft)]">Opening your assigned business…</div>;
@@ -212,13 +219,13 @@ function Shell({ children }: { children: ReactNode }) {
           {employeeWorkspace && activeBusiness ? (
             <div className="flex items-center gap-3 px-2">
               <BusinessMark business={activeBusiness} compact />
-              <div className="min-w-0"><p className="truncate text-sm font-black text-white">{activeBusiness.name}</p><p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-white/45">{activeBranding.tagline || "Sales workspace"}</p></div>
+              <div className="min-w-0"><p className="truncate text-sm font-black text-[var(--on-brand-deep)]">{activeBusiness.name}</p><p className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/45">{activeBranding.tagline || "Sales workspace"}</p></div>
             </div>
           ) : <Logo inverse className="px-2" />}
 
           {portfolioNav.length ? (
             <nav className="mt-8 space-y-1" aria-label="Portfolio navigation">
-              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">Portfolio</p>
+              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--on-brand-deep)]/35">Portfolio</p>
               {portfolioNav.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}
             </nav>
           ) : null}
@@ -226,23 +233,23 @@ function Shell({ children }: { children: ReactNode }) {
           {activeBusiness ? (
             <nav className={`${portfolioNav.length ? "mt-7" : "mt-8"} min-h-0 flex-1 overflow-y-auto pb-4 scrollbar-thin`} aria-label={`${activeBusiness.name} navigation`}>
               <div className="mb-2 flex items-center justify-between px-3">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/35">{employeeWorkspace ? "Workspace" : "Current business"}</p>
-                <span className="rounded-md bg-white/8 px-1.5 py-0.5 text-[9px] font-bold text-white/50">{activeBusiness.code}</span>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--on-brand-deep)]/35">{employeeWorkspace ? "Workspace" : "Current business"}</p>
+                <span className="rounded-md bg-white/8 px-1.5 py-0.5 text-[9px] font-bold text-[var(--on-brand-deep)]/50">{activeBusiness.code}</span>
               </div>
               <div className="space-y-1">{visibleBusinessNav.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}</div>
             </nav>
           ) : (
             <div className="mt-7 flex-1 rounded-2xl border border-white/10 bg-white/5 p-4">
               <Sparkles className="text-[var(--accent)]" size={20} />
-              <p className="mt-3 text-sm font-semibold text-white">Everything in one place</p>
-              <p className="mt-1 text-xs leading-5 text-white/55">Switch between businesses without mixing their records.</p>
+              <p className="mt-3 text-sm font-semibold text-[var(--on-brand-deep)]">Everything in one place</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--on-brand-deep)]/55">Switch between businesses without mixing their records.</p>
             </div>
           )}
 
           <button type="button" onClick={() => setProfileOpen(true)} className="mt-auto flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/6 p-3 text-left transition hover:bg-white/10">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent)] text-sm font-black text-[var(--brand-deep)]">{user?.initials}</span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-white">{user?.name}</span><span className="block truncate text-xs text-white/50">{employeeWorkspace ? activeBusiness?.name : user?.email}</span></span>
-            <ChevronDown size={16} className="text-white/45" />
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent)] text-sm font-black text-[var(--on-accent)]">{user?.initials}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-[var(--on-brand-deep)]">{user?.name}</span><span className="block truncate text-xs text-[var(--on-brand-deep)]/50">{employeeWorkspace ? activeBusiness?.name : user?.email}</span></span>
+            <ChevronDown size={16} className="text-[var(--on-brand-deep)]/45" />
           </button>
         </div>
       </aside>
@@ -282,13 +289,13 @@ function Shell({ children }: { children: ReactNode }) {
         {employeeWorkspace && activeBusiness ? <>
           <MobileNavLink href={`/b/${activeBusiness.id}`} icon={LayoutDashboard} label="Home" pathname={pathname} exact />
           <MobileNavLink href={`/b/${activeBusiness.id}/sales`} icon={ReceiptText} label="My sales" pathname={pathname} />
-          <Link href={salesHref} className="relative -mt-6 flex flex-col items-center gap-1 text-[10px] font-bold text-[var(--brand)]" aria-label="Create new sale"><span className="grid h-14 w-14 place-items-center rounded-[18px] border-4 border-[var(--canvas)] bg-[var(--brand)] text-white shadow-[0_12px_24px_rgb(19_95_72/0.3)]"><Plus size={25} /></span><span>New</span></Link>
+          <Link href={salesHref} className="relative -mt-6 flex flex-col items-center gap-1 text-[10px] font-bold text-[var(--brand)]" aria-label="Create new sale"><span className="grid h-14 w-14 place-items-center rounded-[18px] border-4 border-[var(--canvas)] bg-[var(--brand)] text-[var(--on-brand)] shadow-[0_12px_24px_rgb(19_95_72/0.3)]"><Plus size={25} /></span><span>New</span></Link>
           <MobileNavLink href={`/b/${activeBusiness.id}/customers`} icon={ContactRound} label="Customers" pathname={pathname} />
           <MobileNavLink href={`/b/${activeBusiness.id}/catalog`} icon={Boxes} label="Products" pathname={pathname} />
         </> : <>
           <MobileNavLink href={activeBusiness ? `/b/${activeBusiness.id}` : "/"} icon={LayoutDashboard} label="Home" pathname={pathname} exact />
           <MobileNavLink href={activeBusiness ? `/b/${activeBusiness.id}/sales` : salesHref} icon={ReceiptText} label="Sales" pathname={pathname} />
-          {canCreateSale ? <Link href={salesHref} className="relative -mt-6 flex flex-col items-center gap-1 text-[10px] font-bold text-[var(--brand)]" aria-label="Create new sale"><span className="grid h-14 w-14 place-items-center rounded-[18px] border-4 border-[var(--canvas)] bg-[var(--brand)] text-white shadow-[0_12px_24px_rgb(19_95_72/0.3)]"><Plus size={25} /></span><span>New</span></Link> : <MobileNavLink href="/businesses" icon={Building2} label="Business" pathname={pathname} />}
+          {canCreateSale ? <Link href={salesHref} className="relative -mt-6 flex flex-col items-center gap-1 text-[10px] font-bold text-[var(--brand)]" aria-label="Create new sale"><span className="grid h-14 w-14 place-items-center rounded-[18px] border-4 border-[var(--canvas)] bg-[var(--brand)] text-[var(--on-brand)] shadow-[0_12px_24px_rgb(19_95_72/0.3)]"><Plus size={25} /></span><span>New</span></Link> : <MobileNavLink href="/businesses" icon={Building2} label="Business" pathname={pathname} />}
           <MobileNavLink href={fourthMobileHref} icon={canSeeExpenses ? WalletCards : ContactRound} label={canSeeExpenses ? "Expenses" : "Customers"} pathname={pathname} />
           <button type="button" onClick={() => setMobileMenu(true)} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold text-[var(--ink-soft)]"><Menu size={20} /><span>More</span></button>
         </>}
@@ -312,7 +319,7 @@ function Shell({ children }: { children: ReactNode }) {
       </Modal>
 
       <Modal open={profileOpen} onClose={() => setProfileOpen(false)} title="Your account" description={employeeWorkspace && activeBusiness ? `Assigned to ${activeBusiness.name}` : "Signed in to MeroBiz"} size="sm">
-        <div className="flex items-center gap-4 rounded-2xl bg-[var(--surface-soft)] p-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--brand)] font-black text-white">{user?.initials}</span><div className="min-w-0"><p className="truncate font-bold">{user?.name}</p><p className="truncate text-sm text-[var(--ink-soft)]">{user?.email}</p></div></div>
+        <div className="flex items-center gap-4 rounded-2xl bg-[var(--surface-soft)] p-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--brand)] font-black text-[var(--on-brand)]">{user?.initials}</span><div className="min-w-0"><p className="truncate font-bold">{user?.name}</p><p className="truncate text-sm text-[var(--ink-soft)]">{user?.email}</p></div></div>
         <Button className="mt-4 w-full" variant="secondary" leftIcon={<LogOut size={17} />} onClick={() => void logout()}>Sign out</Button>
       </Modal>
     </div>
