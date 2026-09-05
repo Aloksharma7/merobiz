@@ -5,6 +5,8 @@ export type User = {
   phone?: string | null;
   initials: string;
   preferred_currency: string;
+  has_signature: boolean;
+  signature_url?: string | null;
   workspace?: {
     mode: "portfolio" | "employee" | "writer";
     business_id?: number | null;
@@ -385,7 +387,7 @@ export type Invoice = {
   customer?: Pick<Customer, "id" | "name" | "phone" | "email" | "pan_number" | "address"> | null;
   project_id?: number | null;
   project?: { id: number; client_name: string } | null;
-  creator?: { id: number; name: string; initials: string };
+  creator?: { id: number; name: string; initials: string; signature_url?: string | null };
   subtotal: number;
   discount_amount: number;
   tax_amount: number;
@@ -447,12 +449,16 @@ export type Member = {
   salary_visible_to_staff: boolean;
   salary_paid_total: number;
   salary_pending: number;
+  outstanding_loan: number;
 };
+
+export type SalaryEntryType = "payment" | "advance" | "loan" | "write_off";
 
 export type SalaryPaymentRecord = {
   id: number;
   payment_date: string;
   amount: number;
+  entry_type: SalaryEntryType;
   method: PaymentMethod;
   reference?: string | null;
   notes?: string | null;
@@ -467,9 +473,10 @@ export type SalarySummary = {
   accrued: number;
   paid_total: number;
   pending: number;
+  outstanding_loan: number;
 };
 
-export type MySalary = { visible: false } | ({ visible: true } & SalarySummary);
+export type MySalary = { visible: false; outstanding_loan: number } | ({ visible: true } & SalarySummary);
 
 export type ProfitAllocation = {
   id: number;

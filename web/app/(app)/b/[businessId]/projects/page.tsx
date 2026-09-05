@@ -13,7 +13,7 @@ import { api } from "@/lib/api";
 import { useBusinesses } from "@/lib/business-context";
 import { PROJECT_WORK_STATUSES } from "@/lib/project-status";
 import type { Paginated, Project, Writer } from "@/lib/types";
-import { money, prettyDate, today } from "@/lib/utils";
+import { money, prettyDate, shortTopic, today } from "@/lib/utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { CalendarClock, FolderKanban, PenTool, Plus, Search } from "lucide-react";
 import Link from "next/link";
@@ -90,7 +90,7 @@ function ProjectsPageContent() {
               {rows.map((project) => (
                 <Link href={`/b/${businessId}/projects/${project.id}`} key={project.id} className="block rounded-2xl border border-[var(--line)] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#b7c8bb] hover:shadow-[0_16px_36px_rgb(17_48_35/0.08)]">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><p className="truncate font-bold">{project.client_name}</p><p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{project.topic}</p></div>
+                    <div className="min-w-0"><p className="truncate font-bold">{project.client_name}</p><p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{shortTopic(project.topic)}</p></div>
                     <Badge tone={statusTone(project.work_status)}>{project.work_status}</Badge>
                   </div>
                   <p className="mt-2.5 text-xs text-[var(--ink-soft)]">{project.course} · {project.work}</p>

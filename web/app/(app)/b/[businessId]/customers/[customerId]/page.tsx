@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { api } from "@/lib/api";
 import { useBusinesses } from "@/lib/business-context";
 import type { CustomerInvoiceProfile, CustomerProjectProfile, CustomerProjectRow } from "@/lib/types";
-import { humanize, money, prettyDate } from "@/lib/utils";
+import { humanize, money, prettyDate, shortTopic } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Briefcase, CheckCircle2, CircleDollarSign, FolderKanban, Mail, PenTool, Phone, ReceiptText, Wallet2 } from "lucide-react";
 import Link from "next/link";
@@ -131,7 +131,7 @@ function ProjectsTable({ rows, businessId, currency, showRefunded }: { rows: Cus
           <tbody className="divide-y divide-[var(--line)]">
             {rows.map((row) => (
               <tr key={row.id} className="cursor-pointer hover:bg-[var(--surface-soft)]" onClick={() => router.push(`/b/${businessId}/projects/${row.id}`)}>
-                <td className="px-5 py-3.5"><Link href={`/b/${businessId}/projects/${row.id}`} onClick={(event) => event.stopPropagation()} className="block max-w-[280px] truncate font-bold hover:text-[var(--brand)]">{row.topic}</Link><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p></td>
+                <td className="px-5 py-3.5"><Link href={`/b/${businessId}/projects/${row.id}`} onClick={(event) => event.stopPropagation()} className="block max-w-[280px] truncate font-bold hover:text-[var(--brand)]">{shortTopic(row.topic)}</Link><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p></td>
                 <td className="px-4 py-3.5"><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></td>
                 <td className="px-4 py-3.5 text-xs text-[var(--ink-soft)]">{row.writer ? <span className="flex items-center gap-1.5"><PenTool size={12} />{row.writer.name}</span> : "Unassigned"}</td>
                 <td className="px-4 py-3.5 text-right font-semibold">{money(row.deal_amount, currency)}</td>
@@ -145,7 +145,7 @@ function ProjectsTable({ rows, businessId, currency, showRefunded }: { rows: Cus
       <div className="divide-y divide-[var(--line)] md:hidden">
         {rows.map((row) => (
           <Link href={`/b/${businessId}/projects/${row.id}`} key={row.id} className="block p-4 hover:bg-[var(--surface-soft)]">
-            <div className="flex items-center justify-between gap-3"><p className="truncate font-bold">{row.topic}</p><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></div>
+            <div className="flex items-center justify-between gap-3"><p className="truncate font-bold">{shortTopic(row.topic)}</p><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></div>
             <p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p>
             <div className="mt-2 flex items-center justify-between text-sm"><span className="text-[var(--ink-soft)]">Collected {money(row.collected_amount, currency)} of {money(row.deal_amount, currency)}</span><span className="font-black">{money(showRefunded ? row.refunded_amount : row.due_amount, currency)} {showRefunded ? "refunded" : "due"}</span></div>
           </Link>

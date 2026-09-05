@@ -7,6 +7,7 @@ use App\Enums\PayType;
 use App\Models\Business;
 use App\Models\BusinessMembership;
 use App\Models\Invoice;
+use App\Models\SalaryPayment;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\DashboardService;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TeamController extends Controller
 {
@@ -80,10 +82,46 @@ class TeamController extends Controller
                 'salary_visible_to_staff' => $salary['salary_visible_to_staff'],
                 'salary_paid_total' => $salary['paid_total'],
                 'salary_pending' => $salary['pending'],
+                'outstanding_loan' => $salary['outstanding_loan'],
             ];
         });
 
         return response()->json(['data' => $rows->values()]);
+    }
+
+    public function export(Request $request, Business $business): StreamedResponse
+    {
+        $this->requirePermission($request, 'team.manage');
+        $range = DateRange::fromRequest($request);
+
+        $payments = SalaryPayment::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('payment_date', [$range->start->toDateString(), $range->end->toDateString()])
+            ->with(['membership.user:id,name', 'recorder:id,name'])
+            ->latest('payment_date')
+            ->latest('id')
+            ->get();
+
+        $filename = 'payroll-'.$business->code.'-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($payments): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['Date', 'Member', 'Pay type', 'Entry type', 'Amount', 'Method', 'Reference', 'Recorded By', 'Notes']);
+            foreach ($payments as $payment) {
+                fputcsv($handle, [
+                    $payment->payment_date->format('Y-m-d'),
+                    $payment->membership?->user?->name ?? '—',
+                    $payment->membership?->pay_type->value ?? '',
+                    $payment->entry_type->value,
+                    $payment->amount,
+                    $payment->method->value,
+                    $payment->reference ?? '',
+                    $payment->recorder?->name ?? '—',
+                    $payment->notes ?? '',
+                ]);
+            }
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     public function store(Request $request, Business $business): JsonResponse

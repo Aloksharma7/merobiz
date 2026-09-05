@@ -42,6 +42,9 @@ class InvoiceResource extends JsonResource
                 'id' => $this->creator->id,
                 'name' => $this->creator->name,
                 'initials' => $this->creator->initials,
+                'signature_url' => $this->creator->signature_path
+                    ? url('/api/public/users/'.$this->creator->id.'/signature?v='.($this->creator->updated_at?->timestamp ?? time()))
+                    : null,
             ]),
             'subtotal' => (float) $this->subtotal,
             'discount_amount' => (float) $this->discount_amount,

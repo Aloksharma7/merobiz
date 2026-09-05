@@ -286,6 +286,46 @@ class ProjectTest extends TestCase
         ])->assertCreated();
     }
 
+    public function test_listing_projects_serializes_invoices_profit_approvals_and_refunds_without_error(): void
+    {
+        $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-list-full@example.test', 'password' => 'password']);
+        $business = $this->installmentBusiness($owner);
+
+        Sanctum::actingAs($owner);
+        $project = $this->postJson("/api/businesses/{$business->id}/projects", [
+            'client_name' => 'Client Full', 'topic' => 'Topic full', 'course' => 'MBA', 'work' => 'Thesis', 'deal_amount' => 20000,
+        ])->assertCreated()->json('project');
+
+        $invoice = $this->postJson("/api/businesses/{$business->id}/invoices", [
+            'project_id' => $project['id'], 'invoice_date' => today()->toDateString(), 'status' => 'issued',
+            'discount_amount' => 0,
+            'items' => [['description' => 'Payment', 'quantity' => 1, 'unit_price' => 5000, 'discount_amount' => 0, 'tax_rate' => 0]],
+        ])->assertCreated()->json('invoice');
+        $this->postJson("/api/businesses/{$business->id}/invoices/{$invoice['id']}/payments", [
+            'payment_date' => today()->toDateString(), 'amount' => 5000, 'method' => 'cash',
+        ])->assertCreated();
+        $this->postJson("/api/businesses/{$business->id}/projects/{$project['id']}/profit-approvals", [
+            'approved_on' => today()->toDateString(), 'amount' => 1000, 'notes' => 'Partial approval',
+        ])->assertCreated();
+        $this->postJson("/api/businesses/{$business->id}/projects/{$project['id']}/refunds", [
+            'refunded_on' => today()->toDateString(), 'amount' => 500, 'notes' => 'Partial refund',
+        ])->assertCreated();
+
+        // Each project's invoices/profit-approvals/refunds are eager-loaded with a
+        // trimmed column list for list-page performance — that list must include
+        // every field ProjectResource actually serializes (dates especially), or
+        // this 500s instead of returning data.
+        $rows = $this->getJson("/api/businesses/{$business->id}/projects")->assertOk()->json('data');
+        $row = collect($rows)->firstWhere('id', $project['id']);
+
+        $this->assertSame($invoice['invoice_number'], $row['invoices'][0]['invoice_number']);
+        $this->assertSame(today()->toDateString(), $row['invoices'][0]['invoice_date']);
+        $this->assertSame('Partial approval', $row['profit_approvals'][0]['notes']);
+        $this->assertSame(today()->toDateString(), $row['profit_approvals'][0]['approved_on']);
+        $this->assertSame('Partial refund', $row['refunds'][0]['notes']);
+        $this->assertSame(today()->toDateString(), $row['refunds'][0]['refunded_on']);
+    }
+
     public function test_listing_projects_does_not_issue_a_query_per_project_for_the_current_writer(): void
     {
         $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-list@example.test', 'password' => 'password']);

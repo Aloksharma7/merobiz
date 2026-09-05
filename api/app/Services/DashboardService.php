@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Enums\BusinessCategory;
 use App\Enums\BusinessRole;
 use App\Enums\InvoiceStatus;
+use App\Enums\PayType;
+use App\Enums\SalaryEntryType;
 use App\Models\AuditLog;
 use App\Models\Business;
 use App\Models\BusinessMembership;
@@ -15,6 +17,7 @@ use App\Models\ProfitDistribution;
 use App\Models\ProfitWithdrawal;
 use App\Models\ProjectProfitApproval;
 use App\Models\ProjectRefund;
+use App\Models\SalaryPayment;
 use App\Models\User;
 use App\Support\DateRange;
 use Carbon\CarbonImmutable;
@@ -256,7 +259,7 @@ class DashboardService
     }
 
     /**
-     * @return array{net_sales: float, invoiced_total: float, tax_collected: float, cost_of_sales: float, gross_profit: float, expenses: float, commissions: float, project_profit: float, refunds: float, net_profit: float, cash_collected: float, receivables: float, invoice_count: float, average_invoice: float}
+     * @return array{net_sales: float, invoiced_total: float, tax_collected: float, cost_of_sales: float, gross_profit: float, expenses: float, commissions: float, salary_cost: float, project_profit: float, refunds: float, net_profit: float, cash_collected: float, receivables: float, invoice_count: float, average_invoice: float}
      */
     public function metrics(Business $business, CarbonInterface $start, CarbonInterface $end, ?User $creator = null): array
     {
@@ -312,11 +315,17 @@ class DashboardService
         // A refund is money physically handed back for an aborted project — it
         // reduces what the business actually collected, same as an expense reduces profit.
         $refunds = $creator ? 0.0 : $this->refundedAmount($business, $start, $end);
+        // Commission is already deducted above from the invoice's accrued
+        // commission_amount (recognized when the sale happens), so actually paying
+        // it out later isn't counted again here — only fixed-salary payroll (which
+        // is never recognized anywhere else) and forgiven loans (a real loss once
+        // written off) reduce profit as real cash movements.
+        $salaryCost = $creator ? 0.0 : $this->salaryCost($business, $start, $end);
         $cashCollected = (float) $payments->sum('amount') - $refunds;
 
         $netSales = $subtotal - $discounts;
         $grossProfit = $isInstallment ? 0.0 : ($netSales - $cost);
-        $netProfit = $grossProfit - $expenses - $commissions - $refunds + $projectProfit;
+        $netProfit = $grossProfit - $expenses - $commissions - $salaryCost - $refunds + $projectProfit;
 
         return [
             'net_sales' => round($netSales, 2),
@@ -326,6 +335,7 @@ class DashboardService
             'gross_profit' => round($grossProfit, 2),
             'expenses' => round($expenses, 2),
             'commissions' => round($commissions, 2),
+            'salary_cost' => round($salaryCost, 2),
             'project_profit' => round($projectProfit, 2),
             'refunds' => round($refunds, 2),
             'net_profit' => round($netProfit, 2),
@@ -334,6 +344,25 @@ class DashboardService
             'invoice_count' => $invoiceCount,
             'average_invoice' => $invoiceCount > 0 ? round($invoicedTotal / $invoiceCount, 2) : 0.0,
         ];
+    }
+
+    private function salaryCost(Business $business, CarbonInterface $start, CarbonInterface $end): float
+    {
+        // A single conditional-aggregate query, not two separate sums — metrics()
+        // runs up to ten times per dashboard load, so each extra query here is
+        // actually ten extra queries against the dashboard's query budget.
+        $aggregate = SalaryPayment::query()
+            ->join('business_memberships', 'business_memberships.id', '=', 'salary_payments.membership_id')
+            ->where('salary_payments.business_id', $business->id)
+            ->whereBetween('salary_payments.payment_date', [$start->toDateString(), $end->toDateString()])
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN salary_payments.entry_type IN (?, ?) AND business_memberships.pay_type = ? THEN salary_payments.amount ELSE 0 END), 0) as payroll, ".
+                'COALESCE(SUM(CASE WHEN salary_payments.entry_type = ? THEN salary_payments.amount ELSE 0 END), 0) as write_offs',
+                [SalaryEntryType::Payment->value, SalaryEntryType::Advance->value, PayType::FixedSalary->value, SalaryEntryType::WriteOff->value]
+            )
+            ->first();
+
+        return (float) $aggregate->payroll + (float) $aggregate->write_offs;
     }
 
     private function approvedProjectProfit(Business $business, CarbonInterface $start, CarbonInterface $end): float
@@ -447,6 +476,7 @@ class DashboardService
             'gross_profit' => 0.0,
             'expenses' => 0.0,
             'commissions' => 0.0,
+            'salary_cost' => 0.0,
             'project_profit' => 0.0,
             'refunds' => 0.0,
             'net_profit' => 0.0,
@@ -464,6 +494,7 @@ class DashboardService
         $metrics['cost_of_sales'] = 0.0;
         $metrics['gross_profit'] = 0.0;
         $metrics['expenses'] = 0.0;
+        $metrics['salary_cost'] = 0.0;
         $metrics['project_profit'] = 0.0;
         $metrics['net_profit'] = 0.0;
 

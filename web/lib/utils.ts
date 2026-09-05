@@ -20,6 +20,13 @@ export function money(value: number | string | null | undefined, currency = "NPR
   }
 }
 
+// A thesis/installment project's topic can be a full sentence-length title —
+// shortened for compact identification next to a client name in list views.
+export function shortTopic(topic: string, length = 40) {
+  const trimmed = topic.trim();
+  return trimmed.length > length ? `${trimmed.slice(0, length).trimEnd()}…` : trimmed;
+}
+
 export function compactMoney(value: number, currency = "NPR") {
   try {
     return new Intl.NumberFormat("en-NP", {

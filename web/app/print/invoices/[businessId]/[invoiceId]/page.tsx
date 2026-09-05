@@ -284,9 +284,13 @@ export default function PrintableInvoicePage() {
               ) : <div />}
               {visible.signature ? (
                 <div className="self-end text-center">
-                  <div className="mx-auto h-10 w-40 border-b border-[#202b25]" />
-                  <p className="mt-1.5 text-[10px] font-bold">{settings.authorized_name || "Authorized Signature"}</p>
-                  {settings.authorized_name ? <p className="text-[9px] text-[#68736c]">{settings.authorized_title || "Authorized Signatory"}</p> : null}
+                  {invoice.creator?.signature_url ? (
+                    <img src={invoice.creator.signature_url} alt="" className="mx-auto h-10 w-40 object-contain object-bottom" />
+                  ) : (
+                    <div className="mx-auto h-10 w-40 border-b border-[#202b25]" />
+                  )}
+                  <p className="mt-1.5 text-[10px] font-bold">{invoice.creator?.signature_url ? invoice.creator.name : settings.authorized_name || "Authorized Signature"}</p>
+                  {!invoice.creator?.signature_url && settings.authorized_name ? <p className="text-[9px] text-[#68736c]">{settings.authorized_title || "Authorized Signatory"}</p> : null}
                   <p className="mt-1 text-[8.5px] text-[#7a847e]">For {companyName}</p>
                 </div>
               ) : null}

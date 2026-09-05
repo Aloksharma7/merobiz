@@ -27,11 +27,16 @@ export function ProjectSaleFormModal({
 }) {
   const [projectId, setProjectId] = useState("");
   const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
   const [date, setDate] = useState(today());
   const [method, setMethod] = useState<PaymentMethod>("bank_transfer");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const queryClient = useQueryClient();
+
+  function defaultDescription(row: Project) {
+    return `${row.work} — ${row.topic}`.slice(0, 255);
+  }
 
   const projectsQuery = useQuery({
     queryKey: ["projects", String(businessId), "roster"],
@@ -43,6 +48,7 @@ export function ProjectSaleFormModal({
     if (open) {
       setProjectId(defaultProjectId ? String(defaultProjectId) : "");
       setAmount("");
+      setDescription("");
       setDate(today());
       setMethod("bank_transfer");
       setNotes("");
@@ -52,6 +58,13 @@ export function ProjectSaleFormModal({
 
   const project = (projectsQuery.data ?? []).find((row) => row.id === Number(projectId));
   const amountExceedsDue = Boolean(project) && Number(amount) > project!.due_amount + 0.001;
+
+  // Prefills the billed description from the project, but only while it still
+  // matches an earlier project's default — once the seller types their own
+  // wording (or picks a different project) it's left alone.
+  useEffect(() => {
+    if (project) setDescription((current) => (current === "" ? defaultDescription(project) : current));
+  }, [project]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -63,7 +76,7 @@ export function ProjectSaleFormModal({
         discount_amount: 0,
         notes: notes || null,
         items: [{
-          description: `${project.work} — ${project.topic}`.slice(0, 255),
+          description: (description || defaultDescription(project)).slice(0, 255),
           quantity: 1,
           unit_price: Number(amount),
           discount_amount: 0,
@@ -112,7 +125,7 @@ export function ProjectSaleFormModal({
     >
       <form id="project-sale-form" onSubmit={(event) => { event.preventDefault(); setErrors({}); mutation.mutate(); }} className="space-y-4">
         <FieldShell label="Project" htmlFor="project-sale-project" error={errors.project_id?.[0]} required>
-          <Select id="project-sale-project" value={projectId} onChange={(event) => { setProjectId(event.target.value); setAmount(""); }} required>
+          <Select id="project-sale-project" value={projectId} onChange={(event) => { setProjectId(event.target.value); setAmount(""); setDescription(""); }} required>
             <option value="">Select the project this payment is for</option>
             {(projectsQuery.data ?? []).map((row) => <option key={row.id} value={row.id}>{row.client_name} · {row.course}</option>)}
           </Select>
@@ -125,6 +138,11 @@ export function ProjectSaleFormModal({
             <div className="flex items-center justify-between"><span className="font-semibold">Due now</span><span className="font-black">{money(project.due_amount, currency)}</span></div>
             <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">Due = deal amount minus everything already collected across every sale recorded for this project. The most you can record right now is {money(project.due_amount, currency)}.</p>
           </div>
+        ) : null}
+        {project ? (
+          <FieldShell label="Billed as" htmlFor="project-sale-description" hint="What appears on the printed invoice — defaults to the topic, edit it for a shorter or different description">
+            <Input id="project-sale-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={255} placeholder={defaultDescription(project)} />
+          </FieldShell>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldShell label="Amount received" htmlFor="project-sale-amount" error={errors.amount?.[0] ?? (amountExceedsDue ? `Cannot exceed the due amount of ${money(project!.due_amount, currency)}.` : undefined)} required>

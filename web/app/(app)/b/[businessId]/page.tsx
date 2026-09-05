@@ -156,13 +156,25 @@ export default function BusinessDashboardPage() {
         </section>
       ) : null}
 
-      {mySalaryQuery.data?.visible ? (
+      {mySalaryQuery.data?.visible || (mySalaryQuery.data && mySalaryQuery.data.outstanding_loan > 0) ? (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-[var(--radius)] border border-[var(--brand)] bg-[var(--brand-deep)] p-5 text-[var(--on-brand-deep)] sm:col-span-2">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/55">My salary</p>
-            <p className="mt-2 text-3xl font-black tracking-[-0.04em]">{money(mySalaryQuery.data.pending, currency)}</p>
-            <p className="mt-2 text-xs leading-5 text-[var(--on-brand-deep)]/55">Pending · {money(mySalaryQuery.data.salary_amount, currency)}/month · {money(mySalaryQuery.data.paid_total, currency)} paid so far</p>
-          </div>
+          {mySalaryQuery.data.visible ? (
+            <div className="rounded-[var(--radius)] border border-[var(--brand)] bg-[var(--brand-deep)] p-5 text-[var(--on-brand-deep)] sm:col-span-2">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/55">{mySalaryQuery.data.pay_type === "fixed_salary" ? "My salary" : "My commission"}</p>
+              <p className="mt-2 text-3xl font-black tracking-[-0.04em]">{money(Math.abs(mySalaryQuery.data.pending), currency)}</p>
+              <p className="mt-2 text-xs leading-5 text-[var(--on-brand-deep)]/55">
+                {mySalaryQuery.data.pending < 0 ? "Overpaid — will be deducted from what's owed next" : "Pending"}
+                {mySalaryQuery.data.pay_type === "fixed_salary" ? ` · ${money(mySalaryQuery.data.salary_amount, currency)}/month` : ""} · {money(mySalaryQuery.data.paid_total, currency)} paid so far
+              </p>
+            </div>
+          ) : null}
+          {mySalaryQuery.data.outstanding_loan > 0 ? (
+            <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-soft)] p-5 sm:col-span-2">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Advance you still owe</p>
+              <p className="mt-2 text-3xl font-black tracking-[-0.04em]">{money(mySalaryQuery.data.outstanding_loan, currency)}</p>
+              <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">Given as a loan, separate from your regular pay. Ask an admin if you're unsure why.</p>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

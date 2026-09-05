@@ -22,6 +22,7 @@ class User extends Authenticatable
         'phone',
         'password',
         'preferred_currency',
+        'signature_path',
     ];
 
     /** @var array<int, string> */

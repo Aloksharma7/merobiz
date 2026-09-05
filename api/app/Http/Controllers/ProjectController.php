@@ -50,12 +50,15 @@ class ProjectController extends Controller
             // ProjectResource computes collected/writer-paid/approved-profit totals per
             // project — eager-load what those need so a page of projects costs a
             // handful of queries total instead of several per project in the list.
+            // The invoices column list must match everything ProjectResource actually
+            // serializes per invoice, or those fields come back null (or crash, for a
+            // date column) even though the row has real data.
             ->with([
                 'writerAssignments' => fn ($query) => $query->whereNull('assigned_to')->with('writer'),
-                'invoices:id,project_id,status,paid_amount',
+                'invoices:id,project_id,invoice_number,invoice_date,status,total_amount,paid_amount,balance_amount',
                 'writerPayments:id,project_id,amount',
-                'profitApprovals:id,project_id,amount',
-                'refunds:id,project_id,amount',
+                'profitApprovals:id,project_id,approved_on,amount,notes',
+                'refunds:id,project_id,refunded_on,amount,notes',
             ])
             ->latest('id')
             ->paginate((int) $request->query('per_page', 50));

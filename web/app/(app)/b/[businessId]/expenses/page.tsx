@@ -1,5 +1,6 @@
 "use client";
 
+import { DateRangeControl, defaultRange, type DateRangeValue } from "@/components/dashboard/date-range-control";
 import { ExpenseFormModal } from "@/components/forms/expense-form-modal";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,12 +43,13 @@ function ExpensesPageContent() {
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [exportRange, setExportRange] = useState<DateRangeValue>(defaultRange);
   useEffect(() => { if (canCreate && searchParams.get("new") === "1") setOpen(true); }, [canCreate, searchParams]);
 
   async function exportCsv() {
     setExporting(true);
     try {
-      await downloadFile(`/businesses/${businessId}/expenses/export`, { search: search || undefined, status }, `expenses-${businessId}.csv`);
+      await downloadFile(`/businesses/${businessId}/expenses/export`, { search: search || undefined, status, start: exportRange.start, end: exportRange.end }, `expenses-${businessId}-${exportRange.start}-to-${exportRange.end}.csv`);
     } catch (error) {
       toast.error("Could not export expenses", { description: apiError(error) });
     } finally {
@@ -83,6 +85,9 @@ function ExpensesPageContent() {
   return (
     <div className="space-y-7">
       <PageHeader eyebrow={business.name} title="Expenses" description={canManage ? "Keep business costs simple to enter, easy to approve and visible in profit calculations." : "Add your expenses here. An admin reviews and approves them before they count toward profit."} actions={canManage || canCreate ? <>{canManage ? <Button variant="secondary" leftIcon={<Download size={16} />} onClick={() => void exportCsv()} loading={exporting}>Export CSV</Button> : null}{canCreate ? <Button leftIcon={<Plus size={17} />} onClick={() => setOpen(true)}>Add expense</Button> : null}</> : undefined} />
+      {canManage ? (
+        <div><p className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-[var(--ink-soft)]">Export period</p><DateRangeControl value={exportRange} onChange={setExportRange} /></div>
+      ) : null}
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MiniStat label="Shown total" value={money(summary.total, business.currency)} icon={WalletCards} />
         <MiniStat label="Approved" value={money(summary.approved, business.currency)} icon={Check} />

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\PaymentMethod;
+use App\Enums\SalaryEntryType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,7 +11,7 @@ class SalaryPayment extends Model
 {
     /** @var array<int, string> */
     protected $fillable = [
-        'business_id', 'membership_id', 'recorded_by', 'payment_date', 'amount', 'method', 'reference', 'notes',
+        'business_id', 'membership_id', 'recorded_by', 'payment_date', 'amount', 'entry_type', 'method', 'reference', 'notes',
     ];
 
     protected function casts(): array
@@ -18,6 +19,7 @@ class SalaryPayment extends Model
         return [
             'payment_date' => 'date:Y-m-d',
             'amount' => 'decimal:2',
+            'entry_type' => SalaryEntryType::class,
             'method' => PaymentMethod::class,
         ];
     }

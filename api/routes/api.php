@@ -25,6 +25,7 @@ use App\Http\Controllers\ProjectRefundController;
 use App\Http\Controllers\ProjectWriterAssignmentController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalaryController;
+use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\WriterController;
 use App\Http\Controllers\WriterPaymentController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\WriterSelfController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/public/businesses/{business}/logo', [BusinessController::class, 'logo']);
+Route::get('/public/users/{user}/signature', [SignatureController::class, 'show']);
 
 Route::prefix('auth')->middleware('throttle:10,1')->group(function (): void {
     Route::post('/register', [AuthController::class, 'register']);
@@ -41,6 +43,9 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function (): void {
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    Route::post('/profile/signature', [SignatureController::class, 'store']);
+    Route::delete('/profile/signature', [SignatureController::class, 'destroy']);
 
     Route::get('/portfolio/dashboard', PortfolioDashboardController::class);
     Route::get('/businesses', [BusinessController::class, 'index']);
@@ -105,10 +110,12 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::patch('/expenses/{expense}/status', [ExpenseController::class, 'updateStatus']);
 
             Route::get('/team', [TeamController::class, 'index']);
+            Route::get('/team/export', [TeamController::class, 'export']);
             Route::post('/team', [TeamController::class, 'store']);
             Route::patch('/team/{membership}', [TeamController::class, 'update']);
             Route::get('/team/{membership}/salary', [SalaryController::class, 'index']);
             Route::post('/team/{membership}/salary/payments', [SalaryController::class, 'pay']);
+            Route::post('/team/{membership}/salary/write-off', [SalaryController::class, 'writeOffLoan']);
             Route::get('/my-salary', [SalaryController::class, 'mine']);
 
             Route::get('/ownerships', [OwnershipController::class, 'index']);

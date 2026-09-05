@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { api } from "@/lib/api";
 import { useBusinesses } from "@/lib/business-context";
 import type { WriterProfile } from "@/lib/types";
-import { money, prettyDate } from "@/lib/utils";
+import { money, prettyDate, shortTopic } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Briefcase, CircleDollarSign, FolderKanban, Mail, Phone, Plus, Wallet2 } from "lucide-react";
 import Link from "next/link";
@@ -123,7 +123,7 @@ function ProjectsTable({ rows, businessId, currency, showAssignedRange }: { rows
           <tbody className="divide-y divide-[var(--line)]">
             {rows.map((row) => (
               <tr key={row.id} className="cursor-pointer hover:bg-[var(--surface-soft)]" onClick={() => router.push(`/b/${businessId}/projects/${row.id}`)}>
-                <td className="px-5 py-3.5"><Link href={`/b/${businessId}/projects/${row.id}`} onClick={(event) => event.stopPropagation()} className="block max-w-[220px] truncate font-bold hover:text-[var(--brand)]">{row.client_name}</Link><p className="mt-0.5 max-w-[220px] truncate text-xs text-[var(--ink-soft)]">{row.topic}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p></td>
+                <td className="px-5 py-3.5"><Link href={`/b/${businessId}/projects/${row.id}`} onClick={(event) => event.stopPropagation()} className="block max-w-[220px] truncate font-bold hover:text-[var(--brand)]">{row.client_name}</Link><p className="mt-0.5 max-w-[220px] truncate text-xs text-[var(--ink-soft)]">{shortTopic(row.topic)}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p></td>
                 <td className="px-4 py-3.5"><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></td>
                 {showAssignedRange ? <td className="px-4 py-3.5 text-xs text-[var(--ink-soft)]">{row.assigned_from ? prettyDate(row.assigned_from) : "—"} – {row.assigned_to ? prettyDate(row.assigned_to) : "now"}</td> : null}
                 <td className="px-4 py-3.5 text-right font-semibold">{money(row.writer_payment_amount, currency)}</td>
@@ -138,7 +138,7 @@ function ProjectsTable({ rows, businessId, currency, showAssignedRange }: { rows
         {rows.map((row) => (
           <Link href={`/b/${businessId}/projects/${row.id}`} key={row.id} className="block p-4 hover:bg-[var(--surface-soft)]">
             <div className="flex items-center justify-between gap-3"><p className="truncate font-bold">{row.client_name}</p><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></div>
-            <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{row.topic}</p>
+            <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{shortTopic(row.topic)}</p>
             <p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p>
             <div className="mt-2 flex items-center justify-between text-sm"><span className="text-[var(--ink-soft)]">Paid {money(row.writer_paid_amount, currency)} of {money(row.writer_payment_amount, currency)}</span>{row.writer_due_amount !== null ? <span className="font-black">{money(row.writer_due_amount, currency)} due</span> : null}</div>
           </Link>

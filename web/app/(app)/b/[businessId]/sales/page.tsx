@@ -1,5 +1,6 @@
 "use client";
 
+import { DateRangeControl, defaultRange, type DateRangeValue } from "@/components/dashboard/date-range-control";
 import { InvoiceDetailModal } from "@/components/forms/invoice-detail-modal";
 import { ProjectSaleFormModal } from "@/components/forms/project-sale-form-modal";
 import { SaleFormModal } from "@/components/forms/sale-form-modal";
@@ -40,11 +41,12 @@ function SalesPageContent() {
   const [mineOnly, setMineOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [exportRange, setExportRange] = useState<DateRangeValue>(defaultRange);
 
   async function exportCsv() {
     setExporting(true);
     try {
-      await downloadFile(`/businesses/${businessId}/invoices/export`, { search: search || undefined, status, mine: mineOnly ? 1 : undefined }, `sales-${businessId}.csv`);
+      await downloadFile(`/businesses/${businessId}/invoices/export`, { search: search || undefined, status, mine: mineOnly ? 1 : undefined, start: exportRange.start, end: exportRange.end }, `sales-${businessId}-${exportRange.start}-to-${exportRange.end}.csv`);
     } catch (error) {
       toast.error("Could not export sales", { description: apiError(error) });
     } finally {
@@ -76,6 +78,10 @@ function SalesPageContent() {
   return (
     <div className="space-y-7">
       <PageHeader eyebrow={business.name} title={canSeeAll && !mineOnly ? "Sales & invoices" : "My sales & invoices"} description={canSeeAll ? mineOnly ? "Showing only sales created by you. Turn this off to see the whole company's sales." : "See company sales as they are entered, manage invoices and follow customer payments." : "Only sales created by you appear here. Add sales, create bills and follow payments for your own invoices."} actions={canExport || canCreate ? <>{canExport ? <Button variant="secondary" leftIcon={<Download size={16} />} onClick={() => void exportCsv()} loading={exporting}>Export CSV</Button> : null}{canCreate ? <Button leftIcon={<Plus size={17} />} onClick={() => setNewSale(true)}>New sale</Button> : null}</> : undefined} />
+
+      {canExport ? (
+        <div><p className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-[var(--ink-soft)]">Export period</p><DateRangeControl value={exportRange} onChange={setExportRange} /></div>
+      ) : null}
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MiniStat label={mineOnly ? "My invoices shown" : "Invoices shown"} value={String(rows.length)} icon={ReceiptText} />

@@ -2,6 +2,7 @@
 
 import { Logo } from "@/components/logo";
 import { BusinessMark } from "@/components/business-mark";
+import { SignatureUploader } from "@/components/forms/signature-uploader";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/lib/auth-context";
@@ -331,6 +332,7 @@ function Shell({ children }: { children: ReactNode }) {
 
       <Modal open={profileOpen} onClose={() => setProfileOpen(false)} title="Your account" description={employeeWorkspace && activeBusiness ? `Assigned to ${activeBusiness.name}` : "Signed in to MeroBiz"} size="sm">
         <div className="flex items-center gap-4 rounded-2xl bg-[var(--surface-soft)] p-4"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--brand)] font-black text-[var(--on-brand)]">{user?.initials}</span><div className="min-w-0"><p className="truncate font-bold">{user?.name}</p><p className="truncate text-sm text-[var(--ink-soft)]">{user?.email}</p></div></div>
+        <div className="mt-4"><SignatureUploader /></div>
         <Button className="mt-4 w-full" variant="secondary" leftIcon={<LogOut size={17} />} onClick={() => void logout()}>Sign out</Button>
       </Modal>
     </div>
