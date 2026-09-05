@@ -95,7 +95,7 @@ function ProjectsPageContent() {
                   </div>
                   <p className="mt-2.5 text-xs text-[var(--ink-soft)]">{project.course} · {project.work}</p>
                   {project.deadline ? (() => {
-                    const overdue = project.deadline! < today() && !["submitted", "approved"].includes(project.work_status);
+                    const overdue = project.deadline! < today() && !["submitted", "approved", "cancelled"].includes(project.work_status);
                     return <p className={`mt-2 flex items-center gap-1.5 text-xs font-semibold ${overdue ? "text-[var(--danger)]" : "text-[var(--ink-soft)]"}`}><CalendarClock size={13} />{overdue ? "Overdue since" : "Deadline"} {prettyDate(project.deadline)}</p>;
                   })() : null}
                   <div className="mt-3 flex items-center justify-between border-t border-[var(--line)] pt-3">

@@ -8,4 +8,5 @@ export const PROJECT_WORK_STATUSES: Array<{ value: ProjectWorkStatus; label: str
   { value: "waiting_for_feedback", label: "Waiting for feedback" },
   { value: "submitted", label: "Submitted" },
   { value: "approved", label: "Approved" },
+  { value: "cancelled", label: "Cancelled / Refunded" },
 ];

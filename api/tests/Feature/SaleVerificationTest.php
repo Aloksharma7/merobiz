@@ -68,7 +68,10 @@ class SaleVerificationTest extends TestCase
                 'description' => $product->name,
                 'quantity' => 1,
                 'unit_price' => 1000,
-                // Browser tampering must not expose or change the authoritative cost/tax.
+                // A catalogue line's cost always comes from the product regardless of
+                // role — only a custom line with no product can set an explicit cost.
+                // Tax, however, is trusted from the request once the actor can manage
+                // the catalogue (employees now can, same as admins).
                 'unit_cost' => 1,
                 'discount_amount' => 0,
                 'tax_rate' => 0,
@@ -80,7 +83,7 @@ class SaleVerificationTest extends TestCase
         $this->assertSame(SaleVerificationStatus::Verified, $invoice->verification_status);
         $this->assertSame($employee->id, $invoice->verified_by);
         $this->assertSame('500.00', (string) $invoice->cost_amount);
-        $this->assertSame('130.00', (string) $invoice->tax_amount);
+        $this->assertSame('0.00', (string) $invoice->tax_amount);
 
         $dashboard = app(DashboardService::class);
         $start = CarbonImmutable::today()->startOfDay();

@@ -77,11 +77,14 @@ class CustomerController extends Controller
                 ->with([
                     'writerAssignments' => fn ($query) => $query->whereNull('assigned_to')->with('writer'),
                     'invoices:id,project_id,status,paid_amount',
+                    'refunds:id,project_id,amount',
                 ])
                 ->latest('id')
                 ->get();
 
             $completed = $projects->filter(fn (Project $project) => $project->work_status === ProjectWorkStatus::Approved);
+            $cancelled = $projects->filter(fn (Project $project) => $project->work_status === ProjectWorkStatus::Cancelled);
+            $inProgress = $projects->count() - $completed->count() - $cancelled->count();
 
             $payments = $customer->payments()
                 ->with('invoice.project:id,topic,course,work')
@@ -94,9 +97,11 @@ class CustomerController extends Controller
                 'stats' => [
                     'total_projects' => $projects->count(),
                     'completed_projects' => $completed->count(),
-                    'in_progress_projects' => $projects->count() - $completed->count(),
+                    'cancelled_projects' => $cancelled->count(),
+                    'in_progress_projects' => $inProgress,
                     'total_deal_amount' => round((float) $projects->sum('deal_amount'), 2),
                     'total_collected' => round((float) $projects->sum(fn (Project $project) => $project->collectedAmount()), 2),
+                    'total_refunded' => round((float) $projects->sum(fn (Project $project) => $project->refundedAmount()), 2),
                     'total_due' => round((float) $projects->sum(fn (Project $project) => $project->dueAmount()), 2),
                 ],
                 'projects' => $projects->map(fn (Project $project): array => [
@@ -107,6 +112,7 @@ class CustomerController extends Controller
                     'work_status' => $project->work_status->value,
                     'deal_amount' => (float) $project->deal_amount,
                     'collected_amount' => round($project->collectedAmount(), 2),
+                    'refunded_amount' => round($project->refundedAmount(), 2),
                     'due_amount' => round($project->dueAmount(), 2),
                     'writer' => ($writer = $project->currentWriter()) ? ['id' => $writer->id, 'name' => $writer->name] : null,
                 ])->values(),

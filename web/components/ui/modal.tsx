@@ -5,6 +5,27 @@ import { X } from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+// Body scroll-lock uses a shared reference count, not a naive save/restore per
+// modal. With a naive approach, closing one modal while another opens in the
+// same instant (e.g. the sale form closing as the invoice-detail modal opens
+// right after) races: the closing modal's cleanup can restore `overflow` to
+// visible AFTER the new modal already locked it, leaving the page scrollable
+// but also leaving stale focus/backdrop state that makes it feel unresponsive
+// until a manual reload. A count only unlocks when the last modal closes.
+let openModalCount = 0;
+let previousBodyOverflow = "";
+
+function lockBodyScroll() {
+  if (openModalCount === 0) previousBodyOverflow = document.body.style.overflow;
+  openModalCount += 1;
+  document.body.style.overflow = "hidden";
+}
+
+function unlockBodyScroll() {
+  openModalCount = Math.max(0, openModalCount - 1);
+  if (openModalCount === 0) document.body.style.overflow = previousBodyOverflow;
+}
+
 export function Modal({
   open,
   onClose,
@@ -28,16 +49,18 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.body.style.overflow = "hidden";
+    lockBodyScroll();
     window.requestAnimationFrame(() => dialogRef.current?.focus());
     const listener = (event: KeyboardEvent) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", listener);
     return () => {
-      document.body.style.overflow = previous;
+      unlockBodyScroll();
       window.removeEventListener("keydown", listener);
-      previouslyFocused?.focus();
+      // Don't steal focus back if another modal already took over (e.g. this
+      // one closing as a follow-up modal opens in the same action) — only
+      // restore focus when nothing else is currently open.
+      if (openModalCount === 0) previouslyFocused?.focus();
     };
   }, [open, onClose]);
 

@@ -21,7 +21,7 @@ enum BusinessRole: string
             ],
             self::Employee => [
                 'business.view', 'dashboard.personal',
-                'customers.manage', 'products.view',
+                'customers.manage', 'products.view', 'products.manage',
                 'sales.create', 'sales.view_own', 'sales.view',
                 'payments.view', 'payments.record_own',
                 'expenses.create', 'writers.manage',

@@ -15,7 +15,7 @@ import { PROJECT_WORK_STATUSES } from "@/lib/project-status";
 import type { Paginated, Project, ProjectWorkStatus, Writer } from "@/lib/types";
 import { money, prettyDate, today } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CircleDollarSign, HandCoins, PenTool, Plus, ReceiptText } from "lucide-react";
+import { ArrowLeft, CircleDollarSign, HandCoins, PenTool, Plus, ReceiptText, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -31,6 +31,9 @@ export default function ProjectDetailPage() {
   const [approvedOn, setApprovedOn] = useState(today());
   const [profitAmount, setProfitAmount] = useState("");
   const [profitNotes, setProfitNotes] = useState("");
+  const [refundedOn, setRefundedOn] = useState(today());
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundNotes, setRefundNotes] = useState("");
   const [reassignWriterId, setReassignWriterId] = useState("");
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
@@ -61,6 +64,12 @@ export default function ProjectDetailPage() {
     onError: (error) => { setErrors(fieldErrors(error)); toast.error("Could not approve profit", { description: apiError(error) }); },
   });
 
+  const refundMutation = useMutation({
+    mutationFn: async () => (await api.post(`/businesses/${businessId}/projects/${projectId}/refunds`, { refunded_on: refundedOn, amount: Number(refundAmount), notes: refundNotes || null })).data,
+    onSuccess: async () => { await invalidate(); setRefundAmount(""); setRefundNotes(""); toast.success("Refund recorded"); },
+    onError: (error) => { setErrors(fieldErrors(error)); toast.error("Could not record refund", { description: apiError(error) }); },
+  });
+
   const writerMutation = useMutation({
     mutationFn: async () => (await api.post(`/businesses/${businessId}/projects/${projectId}/writer`, { writer_id: Number(reassignWriterId), date: today() })).data,
     onSuccess: async () => { await invalidate(); setReassignWriterId(""); toast.success("Writer reassigned"); },
@@ -77,7 +86,7 @@ export default function ProjectDetailPage() {
   if (detailQuery.isError || !project) return <ErrorState onRetry={() => void detailQuery.refetch()} />;
 
   const currency = business.currency;
-  const isOverdue = Boolean(project.deadline) && project.deadline! < today() && !["submitted", "approved"].includes(project.work_status);
+  const isOverdue = Boolean(project.deadline) && project.deadline! < today() && !["submitted", "approved", "cancelled"].includes(project.work_status);
 
   return (
     <div className="space-y-7">
@@ -117,10 +126,17 @@ export default function ProjectDetailPage() {
         ) : null}
       </div>
 
-      <section className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+      <section className={`grid grid-cols-2 gap-4 ${project.work_status === "cancelled" && project.refunded_amount > 0 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
         <Stat label="Deal amount" value={money(project.deal_amount, currency)} />
         <Stat label="Collected" value={money(project.collected_amount, currency)} />
-        <Stat label="Due from client" value={money(project.due_amount, currency)} emphasis={project.due_amount > 0} />
+        {project.work_status === "cancelled" ? (
+          <Stat label="Refunded to client" value={money(project.refunded_amount, currency)} emphasis={project.refunded_amount > 0} />
+        ) : (
+          <Stat label="Due from client" value={money(project.due_amount, currency)} emphasis={project.due_amount > 0} />
+        )}
+        {project.work_status === "cancelled" && project.refunded_amount > 0 ? (
+          <Stat label="Kept after refund" value={money(project.net_collected_amount, currency)} />
+        ) : null}
       </section>
 
       <section className="grid grid-cols-2 gap-4 xl:grid-cols-2">
@@ -181,6 +197,37 @@ export default function ProjectDetailPage() {
           </Card>
         ) : null}
       </div>
+
+      {canManage ? (
+        <Card className="overflow-hidden">
+          <CardHeader
+            title={<span className="flex items-center gap-2"><Undo2 size={16} />Refunds</span>}
+            description="Record money given back to the client if this file was closed or aborted before completion."
+          />
+          <CardBody className="space-y-4">
+            {project.refunds?.length ? (
+              <div className="space-y-2">
+                {project.refunds.map((refund) => (
+                  <div key={refund.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-3 text-sm">
+                    <span>{prettyDate(refund.refunded_on)}{refund.notes ? ` · ${refund.notes}` : ""}</span>
+                    <span className="font-black">{money(refund.amount, currency)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-xs text-[var(--ink-soft)]">No refunds recorded yet.</p>}
+            {project.collected_amount - project.refunded_amount > 0.01 ? (
+              <div className="space-y-3 rounded-2xl bg-[var(--surface-soft)] p-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <FieldShell label="Date" htmlFor="project-refund-date" error={errors.refunded_on?.[0]}><Input id="project-refund-date" type="date" max={today()} value={refundedOn} onChange={(event) => setRefundedOn(event.target.value)} /></FieldShell>
+                  <FieldShell label="Refund amount" htmlFor="project-refund-amount" error={errors.amount?.[0]} hint={`Up to ${money(project.collected_amount - project.refunded_amount, currency)}`}><Input id="project-refund-amount" type="number" min="0.01" max={project.collected_amount - project.refunded_amount} step="0.01" placeholder="0.00" value={refundAmount} onChange={(event) => setRefundAmount(event.target.value)} className="w-36" /></FieldShell>
+                  <Button size="sm" variant="secondary" disabled={!refundAmount} loading={refundMutation.isPending} onClick={() => refundMutation.mutate()}>Record refund</Button>
+                </div>
+                <FieldShell label="Notes" htmlFor="project-refund-notes"><Textarea id="project-refund-notes" className="min-h-16" value={refundNotes} onChange={(event) => setRefundNotes(event.target.value)} placeholder="e.g. Client cancelled after first draft" /></FieldShell>
+              </div>
+            ) : null}
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden">
         <CardHeader

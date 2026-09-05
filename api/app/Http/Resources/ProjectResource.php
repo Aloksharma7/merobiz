@@ -32,6 +32,8 @@ class ProjectResource extends JsonResource
             'writer_payment_amount' => (float) $this->writer_payment_amount,
             'collected_amount' => round($collected, 2),
             'due_amount' => round($this->dueAmount(), 2),
+            'refunded_amount' => round($this->refundedAmount(), 2),
+            'net_collected_amount' => round($this->netCollectedAmount(), 2),
             'writer_paid_amount' => round($this->writerPaidAmount(), 2),
             'writer_due_amount' => round($this->writerDueAmount(), 2),
             'approved_profit_total' => $canSeeProfit ? round($this->approvedProfitTotal(), 2) : null,
@@ -61,6 +63,14 @@ class ProjectResource extends JsonResource
                     'amount' => (float) $approval->amount,
                     'notes' => $approval->notes,
                 ])->values()) : null,
+            'refunds' => $this->whenLoaded('refunds', fn () => $this->refunds
+                ->sortByDesc('refunded_on')
+                ->map(fn ($refund): array => [
+                    'id' => $refund->id,
+                    'refunded_on' => $refund->refunded_on->toDateString(),
+                    'amount' => (float) $refund->amount,
+                    'notes' => $refund->notes,
+                ])->values()),
             'writer_history' => $this->whenLoaded('writerAssignments', fn () => $this->writerAssignments
                 ->sortByDesc('assigned_from')
                 ->map(fn ($assignment): array => [

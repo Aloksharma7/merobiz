@@ -14,6 +14,7 @@ use App\Models\ProfitAllocation;
 use App\Models\ProfitDistribution;
 use App\Models\ProfitWithdrawal;
 use App\Models\ProjectProfitApproval;
+use App\Models\ProjectRefund;
 use App\Models\User;
 use App\Support\DateRange;
 use Carbon\CarbonImmutable;
@@ -255,7 +256,7 @@ class DashboardService
     }
 
     /**
-     * @return array{net_sales: float, invoiced_total: float, tax_collected: float, cost_of_sales: float, gross_profit: float, expenses: float, commissions: float, net_profit: float, cash_collected: float, receivables: float, invoice_count: float, average_invoice: float}
+     * @return array{net_sales: float, invoiced_total: float, tax_collected: float, cost_of_sales: float, gross_profit: float, expenses: float, commissions: float, project_profit: float, refunds: float, net_profit: float, cash_collected: float, receivables: float, invoice_count: float, average_invoice: float}
      */
     public function metrics(Business $business, CarbonInterface $start, CarbonInterface $end, ?User $creator = null): array
     {
@@ -302,17 +303,20 @@ class DashboardService
             $payments->whereHas('invoice', fn (Builder $query) => $query->where('created_by', $creator->id));
         }
 
-        $cashCollected = (float) $payments->sum('amount');
         $expenses = $creator ? 0.0 : (float) $business->expenses()
             ->where('status', 'approved')
             ->whereBetween('expense_date', [$start->toDateString(), $end->toDateString()])
             ->sum('amount');
 
         $projectProfit = $creator ? 0.0 : $this->approvedProjectProfit($business, $start, $end);
+        // A refund is money physically handed back for an aborted project — it
+        // reduces what the business actually collected, same as an expense reduces profit.
+        $refunds = $creator ? 0.0 : $this->refundedAmount($business, $start, $end);
+        $cashCollected = (float) $payments->sum('amount') - $refunds;
 
         $netSales = $subtotal - $discounts;
         $grossProfit = $isInstallment ? 0.0 : ($netSales - $cost);
-        $netProfit = $grossProfit - $expenses - $commissions + $projectProfit;
+        $netProfit = $grossProfit - $expenses - $commissions - $refunds + $projectProfit;
 
         return [
             'net_sales' => round($netSales, 2),
@@ -323,6 +327,7 @@ class DashboardService
             'expenses' => round($expenses, 2),
             'commissions' => round($commissions, 2),
             'project_profit' => round($projectProfit, 2),
+            'refunds' => round($refunds, 2),
             'net_profit' => round($netProfit, 2),
             'cash_collected' => round($cashCollected, 2),
             'receivables' => round($receivables, 2),
@@ -340,6 +345,18 @@ class DashboardService
         return (float) ProjectProfitApproval::query()
             ->where('business_id', $business->id)
             ->whereBetween('approved_on', [$start->toDateString(), $end->toDateString()])
+            ->sum('amount');
+    }
+
+    private function refundedAmount(Business $business, CarbonInterface $start, CarbonInterface $end): float
+    {
+        if ($business->category !== BusinessCategory::Installment) {
+            return 0.0;
+        }
+
+        return (float) ProjectRefund::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('refunded_on', [$start->toDateString(), $end->toDateString()])
             ->sum('amount');
     }
 
@@ -431,6 +448,7 @@ class DashboardService
             'expenses' => 0.0,
             'commissions' => 0.0,
             'project_profit' => 0.0,
+            'refunds' => 0.0,
             'net_profit' => 0.0,
             'cash_collected' => 0.0,
             'receivables' => 0.0,

@@ -71,8 +71,9 @@ export default function CustomerDetailPage() {
 
 function ProjectProfileView({ profile, businessId, currency }: { profile: CustomerProjectProfile; businessId: string; currency: string }) {
   const { stats, projects, payments } = profile;
-  const ongoing = projects.filter((row) => row.work_status !== "approved");
+  const ongoing = projects.filter((row) => row.work_status !== "approved" && row.work_status !== "cancelled");
   const completed = projects.filter((row) => row.work_status === "approved");
+  const cancelled = projects.filter((row) => row.work_status === "cancelled");
   return (
     <>
       <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -91,6 +92,13 @@ function ProjectProfileView({ profile, businessId, currency }: { profile: Custom
         <CardHeader title="Previous work" description="Files already approved and completed for this client." />
         {completed.length ? <ProjectsTable rows={completed} businessId={businessId} currency={currency} /> : <CardBody><EmptyState icon={CheckCircle2} title="No completed files yet" description="Approved files for this client will show up here." /></CardBody>}
       </Card>
+
+      {cancelled.length ? (
+        <Card className="overflow-hidden">
+          <CardHeader title="Cancelled / refunded" description={stats.total_refunded > 0 ? `${money(stats.total_refunded, currency)} refunded to this client in total` : "Files closed before completion."} />
+          <ProjectsTable rows={cancelled} businessId={businessId} currency={currency} showRefunded />
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden">
         <CardHeader title="Payment history" description={`${money(stats.total_collected, currency)} collected in total across all files`} />
@@ -113,13 +121,13 @@ function ProjectProfileView({ profile, businessId, currency }: { profile: Custom
   );
 }
 
-function ProjectsTable({ rows, businessId, currency }: { rows: CustomerProjectRow[]; businessId: string; currency: string }) {
+function ProjectsTable({ rows, businessId, currency, showRefunded }: { rows: CustomerProjectRow[]; businessId: string; currency: string; showRefunded?: boolean }) {
   const router = useRouter();
   return (
     <>
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Topic</th><th className="px-4 py-3 font-bold">Status</th><th className="px-4 py-3 font-bold">Writer</th><th className="px-4 py-3 text-right font-bold">Deal</th><th className="px-4 py-3 text-right font-bold">Collected</th><th className="px-5 py-3 text-right font-bold">Due</th></tr></thead>
+          <thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Topic</th><th className="px-4 py-3 font-bold">Status</th><th className="px-4 py-3 font-bold">Writer</th><th className="px-4 py-3 text-right font-bold">Deal</th><th className="px-4 py-3 text-right font-bold">Collected</th><th className="px-5 py-3 text-right font-bold">{showRefunded ? "Refunded" : "Due"}</th></tr></thead>
           <tbody className="divide-y divide-[var(--line)]">
             {rows.map((row) => (
               <tr key={row.id} className="cursor-pointer hover:bg-[var(--surface-soft)]" onClick={() => router.push(`/b/${businessId}/projects/${row.id}`)}>
@@ -128,7 +136,7 @@ function ProjectsTable({ rows, businessId, currency }: { rows: CustomerProjectRo
                 <td className="px-4 py-3.5 text-xs text-[var(--ink-soft)]">{row.writer ? <span className="flex items-center gap-1.5"><PenTool size={12} />{row.writer.name}</span> : "Unassigned"}</td>
                 <td className="px-4 py-3.5 text-right font-semibold">{money(row.deal_amount, currency)}</td>
                 <td className="px-4 py-3.5 text-right font-semibold text-[var(--brand)]">{money(row.collected_amount, currency)}</td>
-                <td className="px-5 py-3.5 text-right font-black">{money(row.due_amount, currency)}</td>
+                <td className="px-5 py-3.5 text-right font-black">{money(showRefunded ? row.refunded_amount : row.due_amount, currency)}</td>
               </tr>
             ))}
           </tbody>
@@ -139,7 +147,7 @@ function ProjectsTable({ rows, businessId, currency }: { rows: CustomerProjectRo
           <Link href={`/b/${businessId}/projects/${row.id}`} key={row.id} className="block p-4 hover:bg-[var(--surface-soft)]">
             <div className="flex items-center justify-between gap-3"><p className="truncate font-bold">{row.topic}</p><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></div>
             <p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p>
-            <div className="mt-2 flex items-center justify-between text-sm"><span className="text-[var(--ink-soft)]">Collected {money(row.collected_amount, currency)} of {money(row.deal_amount, currency)}</span><span className="font-black">{money(row.due_amount, currency)} due</span></div>
+            <div className="mt-2 flex items-center justify-between text-sm"><span className="text-[var(--ink-soft)]">Collected {money(row.collected_amount, currency)} of {money(row.deal_amount, currency)}</span><span className="font-black">{money(showRefunded ? row.refunded_amount : row.due_amount, currency)} {showRefunded ? "refunded" : "due"}</span></div>
           </Link>
         ))}
       </div>

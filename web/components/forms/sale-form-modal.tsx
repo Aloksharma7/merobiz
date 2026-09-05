@@ -5,7 +5,7 @@ import { FieldShell, Input, Select, Textarea } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/modal";
 import { api, apiError, fieldErrors } from "@/lib/api";
 import { useBusinesses } from "@/lib/business-context";
-import type { ApiMessage, Customer, Invoice, Product } from "@/lib/types";
+import type { ApiMessage, Customer, Invoice, PaymentMethod, Product } from "@/lib/types";
 import { money, today } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
@@ -74,6 +74,9 @@ export function SaleFormModal({
   const [useInstallments, setUseInstallments] = useState(false);
   const [installments, setInstallments] = useState<DraftInstallment[]>([]);
   const nextInstallmentKey = useRef(1);
+  const [amountReceived, setAmountReceived] = useState("0");
+  const [amountReceivedTouched, setAmountReceivedTouched] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const queryClient = useQueryClient();
 
@@ -95,6 +98,9 @@ export function SaleFormModal({
       setUseInstallments(false);
       nextInstallmentKey.current = 1;
       setInstallments([]);
+      setAmountReceived("0");
+      setAmountReceivedTouched(false);
+      setPaymentMethod("cash");
       setErrors({});
     }
   }, [defaultTax, open]);
@@ -119,6 +125,13 @@ export function SaleFormModal({
 
   const installmentSum = installments.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
   const installmentMismatch = useInstallments && Math.abs(installmentSum - totals.total) > 0.01;
+
+  useEffect(() => {
+    if (!amountReceivedTouched) setAmountReceived(totals.total > 0 ? totals.total.toFixed(2) : "0");
+  }, [amountReceivedTouched, totals.total]);
+
+  const amountReceivedValue = Math.max(0, Number(amountReceived) || 0);
+  const balanceAfter = Math.max(0, totals.total - amountReceivedValue);
 
   function addInstallment() {
     setInstallments((current) => [...current, emptyInstallment(`installment-${nextInstallmentKey.current++}`, dueDate || today())]);
@@ -157,7 +170,18 @@ export function SaleFormModal({
           installments: installments.map((row) => ({ due_date: row.due_date, amount: Number(row.amount), notes: row.notes || null })),
         } : {}),
       };
-      return (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${businessId}/invoices`, payload)).data;
+      const response = (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${businessId}/invoices`, payload)).data;
+      if (amountReceivedValue > 0) {
+        const paymentAmount = Math.min(amountReceivedValue, response.invoice.total_amount);
+        const paid = (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${businessId}/invoices/${response.invoice.id}/payments`, {
+          payment_date: invoiceDate,
+          amount: paymentAmount,
+          method: paymentMethod,
+          notes: null,
+        })).data;
+        return { ...response, invoice: paid.invoice };
+      }
+      return response;
     },
     onSuccess: async (response) => {
       await Promise.all([
@@ -168,13 +192,15 @@ export function SaleFormModal({
         queryClient.invalidateQueries({ queryKey: ["customers", String(businessId)] }),
         queryClient.invalidateQueries({ queryKey: ["customer", String(businessId)] }),
       ]);
-      toast.success("Invoice created", { description: `${response.invoice.invoice_number} · ${money(response.invoice.total_amount, currency)}` });
+      const paidInFull = response.invoice.balance_amount <= 0.004;
+      toast.success(paidInFull ? "Sale recorded and paid in full" : "Sale recorded", { description: `${response.invoice.invoice_number} · ${money(response.invoice.total_amount, currency)}${response.invoice.paid_amount > 0 && !paidInFull ? ` · ${money(response.invoice.balance_amount, currency)} due` : ""}` });
       onCreated?.(response.invoice);
       onClose();
     },
     onError: (error) => {
       setErrors(fieldErrors(error));
       toast.error("Could not create invoice", { description: apiError(error) });
+      void queryClient.invalidateQueries({ queryKey: ["invoices", String(businessId)] });
     },
   });
 
@@ -309,11 +335,32 @@ export function SaleFormModal({
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-4">
             <FieldShell label="Invoice discount" htmlFor="invoice-discount" error={errors.discount_amount?.[0]} hint="Applied across all lines"><Input id="invoice-discount" type="number" min="0" step="0.01" placeholder="0.00" value={discount} onChange={(event) => setDiscount(event.target.value)} /></FieldShell>
+            <div className="rounded-2xl border border-[var(--line)] p-4">
+              <p className="text-sm font-bold">Payment received</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">Defaults to the full amount — the payment is recorded together with the invoice, no separate step needed. Lower it for a partial or credit sale.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <FieldShell label="Amount received" htmlFor="amount-received" error={errors.amount?.[0]}>
+                  <Input id="amount-received" type="number" min="0" step="0.01" placeholder="0.00" value={amountReceived} onChange={(event) => { setAmountReceivedTouched(true); setAmountReceived(event.target.value); }} />
+                </FieldShell>
+                <FieldShell label="Payment method" htmlFor="payment-method">
+                  <Select id="payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)} disabled={amountReceivedValue <= 0}>
+                    <option value="cash">Cash</option>
+                    <option value="bank_transfer">Bank transfer</option>
+                    <option value="qr">QR payment</option>
+                    <option value="wallet">Digital wallet</option>
+                    <option value="card">Card</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="other">Other</option>
+                  </Select>
+                </FieldShell>
+              </div>
+              {balanceAfter > 0.004 ? <p className="mt-2 text-xs font-semibold text-[var(--danger)]">{money(balanceAfter, currency)} will remain due on this invoice.</p> : null}
+            </div>
             <FieldShell label="Notes or payment instructions" htmlFor="invoice-notes" error={errors.notes?.[0]}><Textarea id="invoice-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Thank you, renewal date, bank details, delivery notes…" /></FieldShell>
           </div>
           <div className="rounded-[20px] bg-[var(--brand-deep)] p-5 text-[var(--on-brand-deep)]">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--on-brand-deep)]/45">Invoice summary</p>
-            <div className="mt-4 space-y-2.5 text-sm"><SummaryLine label="Subtotal" value={money(totals.subtotal, currency)} /><SummaryLine label="Discount" value={`− ${money(totals.discount, currency)}`} /><SummaryLine label="Tax" value={money(totals.tax, currency)} /><div className="my-3 border-t border-[var(--on-brand-deep)]/12" /><SummaryLine label="Customer total" value={money(totals.total, currency)} strong />{canManageCosts ? <><div className="my-3 border-t border-[var(--on-brand-deep)]/12" /><SummaryLine label="Estimated gross profit" value={money(totals.grossProfit, currency)} muted /></> : null}</div>
+            <div className="mt-4 space-y-2.5 text-sm"><SummaryLine label="Subtotal" value={money(totals.subtotal, currency)} /><SummaryLine label="Discount" value={`− ${money(totals.discount, currency)}`} /><SummaryLine label="Tax" value={money(totals.tax, currency)} /><div className="my-3 border-t border-[var(--on-brand-deep)]/12" /><SummaryLine label="Customer total" value={money(totals.total, currency)} strong /><SummaryLine label="Amount received" value={money(amountReceivedValue, currency)} /><SummaryLine label="Balance due" value={money(balanceAfter, currency)} />{canManageCosts ? <><div className="my-3 border-t border-[var(--on-brand-deep)]/12" /><SummaryLine label="Estimated gross profit" value={money(totals.grossProfit, currency)} muted /></> : null}</div>
             <p className="mt-4 text-[11px] leading-5 text-[var(--on-brand-deep)]/42">{canManageCosts ? "Employee commission and business expenses are deducted later to calculate net profit." : "The sale is recorded immediately in this business. No approval step is required."}</p>
           </div>
         </div>

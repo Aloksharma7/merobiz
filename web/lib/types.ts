@@ -133,6 +133,7 @@ export type CustomerProjectRow = {
   work_status: ProjectWorkStatus;
   deal_amount: number;
   collected_amount: number;
+  refunded_amount: number;
   due_amount: number;
   writer: { id: number; name: string } | null;
 };
@@ -162,9 +163,11 @@ export type CustomerProjectProfile = {
   stats: {
     total_projects: number;
     completed_projects: number;
+    cancelled_projects: number;
     in_progress_projects: number;
     total_deal_amount: number;
     total_collected: number;
+    total_refunded: number;
     total_due: number;
   };
   projects: CustomerProjectRow[];
@@ -270,7 +273,8 @@ export type ProjectWorkStatus =
   | "correction_ongoing"
   | "waiting_for_feedback"
   | "submitted"
-  | "approved";
+  | "approved"
+  | "cancelled";
 
 export type ProjectInvoiceSummary = {
   id: number;
@@ -285,6 +289,13 @@ export type ProjectInvoiceSummary = {
 export type ProjectProfitApproval = {
   id: number;
   approved_on: string;
+  amount: number;
+  notes?: string | null;
+};
+
+export type ProjectRefund = {
+  id: number;
+  refunded_on: string;
   amount: number;
   notes?: string | null;
 };
@@ -306,6 +317,8 @@ export type Project = {
   writer_payment_amount: number;
   collected_amount: number;
   due_amount: number;
+  refunded_amount: number;
+  net_collected_amount: number;
   writer_paid_amount: number;
   writer_due_amount: number;
   approved_profit_total: number | null;
@@ -314,6 +327,7 @@ export type Project = {
   created_at: string;
   invoices?: ProjectInvoiceSummary[];
   profit_approvals?: ProjectProfitApproval[] | null;
+  refunds?: ProjectRefund[];
   writer_history?: WriterAssignment[];
 };
 

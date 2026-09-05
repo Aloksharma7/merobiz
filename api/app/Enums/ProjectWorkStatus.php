@@ -11,6 +11,7 @@ enum ProjectWorkStatus: string
     case WaitingForFeedback = 'waiting_for_feedback';
     case Submitted = 'submitted';
     case Approved = 'approved';
+    case Cancelled = 'cancelled';
 
     /** @return array<int, string> */
     public static function values(): array

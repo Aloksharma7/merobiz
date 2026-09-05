@@ -55,6 +55,7 @@ class ProjectController extends Controller
                 'invoices:id,project_id,status,paid_amount',
                 'writerPayments:id,project_id,amount',
                 'profitApprovals:id,project_id,amount',
+                'refunds:id,project_id,amount',
             ])
             ->latest('id')
             ->paginate((int) $request->query('per_page', 50));
@@ -100,7 +101,7 @@ class ProjectController extends Controller
 
         return response()->json([
             'message' => 'Project created.',
-            'project' => new ProjectResource($project->load(['invoices', 'profitApprovals', 'writerAssignments.writer', 'customer'])),
+            'project' => new ProjectResource($project->load(['invoices', 'profitApprovals', 'refunds', 'writerAssignments.writer', 'customer'])),
         ], 201);
     }
 
@@ -110,7 +111,7 @@ class ProjectController extends Controller
         $this->assertInstallment($business);
         $this->assertBusiness($business, $project);
 
-        return new ProjectResource($project->load(['invoices', 'profitApprovals', 'writerAssignments.writer', 'customer']));
+        return new ProjectResource($project->load(['invoices', 'profitApprovals', 'refunds', 'writerAssignments.writer', 'customer']));
     }
 
     public function update(UpdateProjectRequest $request, Business $business, Project $project): JsonResponse
@@ -134,7 +135,7 @@ class ProjectController extends Controller
 
         return response()->json([
             'message' => 'Project updated.',
-            'project' => new ProjectResource($project->fresh()->load(['invoices', 'profitApprovals', 'writerAssignments.writer', 'customer'])),
+            'project' => new ProjectResource($project->fresh()->load(['invoices', 'profitApprovals', 'refunds', 'writerAssignments.writer', 'customer'])),
         ]);
     }
 

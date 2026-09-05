@@ -73,6 +73,11 @@ class Project extends Model
         return $this->hasMany(WriterPayment::class);
     }
 
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(ProjectRefund::class);
+    }
+
     public function collectedAmount(): float
     {
         // Same reasoning as currentWriterAssignment() below — a list of many projects
@@ -87,8 +92,29 @@ class Project extends Model
         return (float) $this->invoices()->whereIn('status', self::LIVE_INVOICE_STATUSES)->sum('paid_amount');
     }
 
+    public function refundedAmount(): float
+    {
+        if ($this->relationLoaded('refunds')) {
+            return (float) $this->refunds->sum(fn (ProjectRefund $refund) => (float) $refund->amount);
+        }
+
+        return (float) $this->refunds()->sum('amount');
+    }
+
+    /** What the business actually kept after giving anything back to the client. */
+    public function netCollectedAmount(): float
+    {
+        return max(0.0, $this->collectedAmount() - $this->refundedAmount());
+    }
+
     public function dueAmount(): float
     {
+        // A cancelled/aborted project is closed out — nothing further is owed on a
+        // deal that's off, however much was or wasn't collected before it stopped.
+        if ($this->work_status === ProjectWorkStatus::Cancelled) {
+            return 0.0;
+        }
+
         // Each sale is its own payment against the deal amount (immediately paid in full),
         // so due is tracked against the deal total rather than any single invoice's balance.
         return max(0.0, (float) $this->deal_amount - $this->collectedAmount());

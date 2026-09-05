@@ -21,6 +21,7 @@ use App\Http\Controllers\ProfitWithdrawalController;
 use App\Http\Controllers\ProfitPeriodController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectProfitApprovalController;
+use App\Http\Controllers\ProjectRefundController;
 use App\Http\Controllers\ProjectWriterAssignmentController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalaryController;
@@ -92,6 +93,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::apiResource('projects', ProjectController::class)->except(['show']);
             Route::get('/projects/{project}', [ProjectController::class, 'show']);
             Route::post('/projects/{project}/profit-approvals', [ProjectProfitApprovalController::class, 'store']);
+            Route::post('/projects/{project}/refunds', [ProjectRefundController::class, 'store']);
             Route::get('/projects/{project}/writer', [ProjectWriterAssignmentController::class, 'index']);
             Route::post('/projects/{project}/writer', [ProjectWriterAssignmentController::class, 'store']);
 

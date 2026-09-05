@@ -100,14 +100,13 @@ class ExpenseController extends Controller
             throw ValidationException::withMessages(['expense_date' => 'This date belongs to a closed profit period.']);
         }
 
-        $canApprove = $membership->allows('expenses.approve');
         $expense = $business->expenses()->create([
             ...$data,
             'submitted_by' => $request->user()->id,
             'tax_amount' => $data['tax_amount'] ?? 0,
-            'status' => $canApprove ? ExpenseStatus::Approved : ExpenseStatus::Pending,
-            'approved_by' => $canApprove ? $request->user()->id : null,
-            'approved_at' => $canApprove ? now() : null,
+            'status' => ExpenseStatus::Approved,
+            'approved_by' => $request->user()->id,
+            'approved_at' => now(),
         ]);
 
         $this->audit->record($request->user(), $business, 'expense.created', $expense, null, $expense->toArray(), $request);
