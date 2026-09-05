@@ -436,6 +436,32 @@ class InvoiceService
         }
     }
 
+    public function delete(Business $business, Invoice $invoice, User $actor): void
+    {
+        DB::transaction(function () use ($business, $invoice, $actor): void {
+            /** @var Invoice $lockedInvoice */
+            $lockedInvoice = Invoice::query()->with(['items.product', 'payments'])->lockForUpdate()->findOrFail($invoice->id);
+            $this->assertBelongsToBusiness($business, $lockedInvoice);
+
+            if ($business->isDateClosed($lockedInvoice->invoice_date)) {
+                throw ValidationException::withMessages(['invoice' => 'This invoice belongs to a closed profit period.']);
+            }
+
+            if (! in_array($lockedInvoice->status, [InvoiceStatus::Draft, InvoiceStatus::Cancelled, InvoiceStatus::Refunded], true)) {
+                $this->restoreInventory($lockedInvoice);
+            }
+
+            $before = $lockedInvoice->toArray();
+            // Payments use nullOnDelete on their invoice_id so they survive an invoice
+            // delete by default — that would leave their amounts still counted in
+            // business-wide cash-collected totals for a sale that no longer exists.
+            $lockedInvoice->payments()->delete();
+            $lockedInvoice->delete();
+
+            $this->audit->record($actor, $business, 'invoice.deleted', $invoice, $before, null);
+        });
+    }
+
     private function assertBelongsToBusiness(Business $business, Invoice $invoice): void
     {
         abort_unless($invoice->business_id === $business->id, 404);

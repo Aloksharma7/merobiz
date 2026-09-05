@@ -84,6 +84,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
             Route::post('/invoices/{invoice}/issue', [InvoiceController::class, 'issue']);
             Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel']);
+            Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy']);
             Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
             Route::get('/invoices/{invoice}/installments', [InvoiceInstallmentController::class, 'index']);
             Route::put('/invoices/{invoice}/installments', [InvoiceInstallmentController::class, 'store']);

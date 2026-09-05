@@ -133,4 +133,15 @@ class InvoiceController extends Controller
 
         return response()->json(['message' => 'Invoice cancelled.', 'invoice' => new InvoiceResource($cancelled)]);
     }
+
+    public function destroy(Request $request, Business $business, Invoice $invoice): JsonResponse
+    {
+        // Deleting a sale (as opposed to cancelling it) is an admin-only action,
+        // regardless of who created the invoice.
+        $this->requirePermission($request, 'sales.manage');
+        abort_unless($invoice->business_id === $business->id, 404);
+        $this->invoices->delete($business, $invoice, $request->user());
+
+        return response()->json(['message' => 'Sale deleted.']);
+    }
 }

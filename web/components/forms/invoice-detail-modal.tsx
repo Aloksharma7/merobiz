@@ -8,7 +8,7 @@ import { api, apiError } from "@/lib/api";
 import type { ApiMessage, Business, Invoice, InvoiceInstallment } from "@/lib/types";
 import { humanize, money, prettyDate } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Banknote, Ban, FileCheck2, Printer, ReceiptText } from "lucide-react";
+import { Banknote, Ban, FileCheck2, Printer, ReceiptText, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -19,6 +19,8 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
   const canCreateOwnSales = business.permissions.includes("sales.create");
   const canManageThisSale = canManageAllSales || canCreateOwnSales;
   const canRecordPayment = business.permissions.includes("*") || business.permissions.includes("payments.manage") || business.permissions.includes("payments.record_own");
+  // Deleting a sale (unlike cancelling it) is admin-only, regardless of who created it.
+  const canDeleteSale = canManageAllSales;
   const installmentsEnabled = Boolean(business.settings?.features?.installments);
 
   const installmentsQuery = useQuery({
@@ -46,6 +48,26 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
     onError: (error) => toast.error("Could not update sale", { description: apiError(error) }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => api.delete(`/businesses/${business.id}/invoices/${invoice?.id}`),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["business-dashboard", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["portfolio-dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["team", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["projects", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["project", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["customers", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["customer", String(business.id)] }),
+        queryClient.invalidateQueries({ queryKey: ["products", String(business.id)] }),
+      ]);
+      toast.success("Sale deleted");
+      onClose();
+    },
+    onError: (error) => toast.error("Could not delete sale", { description: apiError(error) }),
+  });
+
   if (!invoice) return null;
 
   return (
@@ -56,6 +78,7 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
           {invoice.status === "draft" && canManageThisSale ? <Button variant="secondary" leftIcon={<FileCheck2 size={16} />} onClick={() => actionMutation.mutate("issue")} loading={actionMutation.isPending}>Issue</Button> : null}
           {!(invoice.status === "draft" || ["cancelled", "refunded"].includes(invoice.status)) && invoice.paid_amount === 0 && canManageThisSale ? <Button variant="secondary" leftIcon={<Ban size={16} />} onClick={() => actionMutation.mutate("cancel")} loading={actionMutation.isPending}>Cancel</Button> : null}
           {invoice.balance_amount > 0 && !(["draft", "cancelled", "refunded"].includes(invoice.status)) && canRecordPayment ? <Button leftIcon={<Banknote size={16} />} onClick={() => setPaymentOpen(true)}>Record payment</Button> : null}
+          {canDeleteSale ? <Button variant="secondary" leftIcon={<Trash2 size={16} />} loading={deleteMutation.isPending} onClick={() => { if (window.confirm("Delete this sale? This permanently removes the invoice and its payments, and cannot be undone.")) deleteMutation.mutate(); }}>Delete</Button> : null}
         </>
       }>
         <div className="space-y-6">

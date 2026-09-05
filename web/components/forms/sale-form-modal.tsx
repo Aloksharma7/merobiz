@@ -173,13 +173,14 @@ export function SaleFormModal({
       const response = (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${businessId}/invoices`, payload)).data;
       if (amountReceivedValue > 0) {
         const paymentAmount = Math.min(amountReceivedValue, response.invoice.total_amount);
-        const paid = (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${businessId}/invoices/${response.invoice.id}/payments`, {
+        await api.post(`/businesses/${businessId}/invoices/${response.invoice.id}/payments`, {
           payment_date: invoiceDate,
           amount: paymentAmount,
           method: paymentMethod,
           notes: null,
-        })).data;
-        return { ...response, invoice: paid.invoice };
+        });
+        const fresh = (await api.get<{ data: Invoice }>(`/businesses/${businessId}/invoices/${response.invoice.id}`)).data.data;
+        return { ...response, invoice: fresh };
       }
       return response;
     },
