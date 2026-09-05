@@ -476,7 +476,7 @@ export type SalarySummary = {
   outstanding_loan: number;
 };
 
-export type MySalary = { visible: false; outstanding_loan: number } | ({ visible: true } & SalarySummary);
+export type MySalary = { visible: false; outstanding_loan: number } | ({ visible: true; payments: SalaryPaymentRecord[] } & SalarySummary);
 
 export type ProfitAllocation = {
   id: number;

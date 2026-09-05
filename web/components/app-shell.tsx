@@ -36,7 +36,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 type NavItem = { label: string; href: string; icon: LucideIcon; permission?: string; exact?: boolean };
 
-const EMPLOYEE_ALLOWED_PATH_SEGMENTS = ["/sales", "/expenses", "/customers", "/catalog", "/projects", "/writers"];
+const EMPLOYEE_ALLOWED_PATH_SEGMENTS = ["/sales", "/expenses", "/customers", "/catalog", "/projects", "/writers", "/my-pay"];
 
 function isEmployeePathAllowed(pathname: string, base: string) {
   return pathname === base || EMPLOYEE_ALLOWED_PATH_SEGMENTS.some((segment) => pathname.startsWith(`${base}${segment}`));
@@ -145,6 +145,7 @@ function Shell({ children }: { children: ReactNode }) {
         { label: "Products & services", href: `/b/${businessNavId}/catalog`, icon: Boxes, permission: "products.view" },
         { label: "Projects", href: `/b/${businessNavId}/projects`, icon: FolderKanban, permission: "writers.manage" },
         { label: "Writers", href: `/b/${businessNavId}/writers`, icon: PenTool, permission: "writers.manage" },
+        { label: "My pay", href: `/b/${businessNavId}/my-pay`, icon: Wallet2 },
       ];
     }
 

@@ -104,6 +104,45 @@ class SalaryVisibilityTest extends TestCase
             ->assertJsonPath('pending', 100);
     }
 
+    public function test_an_employee_sees_their_own_payment_history_once_visible_but_not_before(): void
+    {
+        $owner = $this->user('Owner', 'owner-history@example.test');
+        $employee = $this->user('Employee', 'employee-history@example.test');
+        $business = Business::query()->create([
+            'owner_id' => $owner->id, 'name' => 'Enlighten Research', 'slug' => 'enlighten-history', 'code' => 'ERH',
+            'business_type' => 'service', 'currency' => 'NPR', 'invoice_prefix' => 'ERH', 'default_tax_rate' => 0, 'status' => 'active',
+        ]);
+        $business->memberships()->create(['user_id' => $owner->id, 'role' => BusinessRole::Owner, 'full_control' => true, 'active' => true]);
+        $membership = $business->memberships()->create([
+            'user_id' => $employee->id, 'role' => BusinessRole::Employee, 'active' => true,
+            'pay_type' => 'fixed_salary', 'salary_amount' => 20000, 'salary_visible_to_staff' => false,
+            'joined_at' => today()->toDateString(),
+        ]);
+
+        Sanctum::actingAs($owner);
+        $this->postJson("/api/businesses/{$business->id}/team/{$membership->id}/salary/payments", [
+            'payment_date' => today()->toDateString(), 'amount' => 5000, 'method' => 'cash', 'notes' => 'First payout',
+        ])->assertCreated();
+
+        // Not visible yet: no payment history leaks even though a payment exists.
+        Sanctum::actingAs($employee);
+        $this->getJson("/api/businesses/{$business->id}/my-salary")
+            ->assertOk()
+            ->assertJson(['visible' => false])
+            ->assertJsonMissingPath('payments');
+
+        Sanctum::actingAs($owner);
+        $this->patchJson("/api/businesses/{$business->id}/team/{$membership->id}", ['salary_visible_to_staff' => true])->assertOk();
+
+        Sanctum::actingAs($employee);
+        $response = $this->getJson("/api/businesses/{$business->id}/my-salary")->assertOk();
+        $response->assertJsonPath('visible', true);
+        $response->assertJsonCount(1, 'payments');
+        $response->assertJsonPath('payments.0.amount', 5000);
+        $response->assertJsonPath('payments.0.notes', 'First payout');
+        $response->assertJsonPath('payments.0.recorded_by', 'Owner');
+    }
+
     private function user(string $name, string $email): User
     {
         return User::query()->create(['name' => $name, 'email' => $email, 'password' => 'password123']);

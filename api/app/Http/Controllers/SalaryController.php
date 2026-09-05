@@ -22,21 +22,9 @@ class SalaryController extends Controller
         $this->requirePermission($request, 'team.manage');
         abort_unless($membership->business_id === $business->id, 404);
 
-        $payments = $membership->salaryPayments()->with('recorder:id,name')->latest('payment_date')->latest('id')->get()
-            ->map(fn ($payment) => [
-                'id' => $payment->id,
-                'payment_date' => $payment->payment_date->toDateString(),
-                'amount' => (float) $payment->amount,
-                'entry_type' => $payment->entry_type->value,
-                'method' => $payment->method->value,
-                'reference' => $payment->reference,
-                'notes' => $payment->notes,
-                'recorded_by' => $payment->recorder?->name,
-            ]);
-
         return response()->json([
             'summary' => $this->salary->summaryFor($membership),
-            'payments' => $payments,
+            'payments' => $this->mapPayments($membership),
         ]);
     }
 
@@ -78,6 +66,22 @@ class SalaryController extends Controller
             return response()->json(['visible' => false, 'outstanding_loan' => $summary['outstanding_loan']]);
         }
 
-        return response()->json(['visible' => true, ...$summary]);
+        return response()->json(['visible' => true, ...$summary, 'payments' => $this->mapPayments($membership)]);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function mapPayments(BusinessMembership $membership): array
+    {
+        return $membership->salaryPayments()->with('recorder:id,name')->latest('payment_date')->latest('id')->get()
+            ->map(fn ($payment) => [
+                'id' => $payment->id,
+                'payment_date' => $payment->payment_date->toDateString(),
+                'amount' => (float) $payment->amount,
+                'entry_type' => $payment->entry_type->value,
+                'method' => $payment->method->value,
+                'reference' => $payment->reference,
+                'notes' => $payment->notes,
+                'recorded_by' => $payment->recorder?->name,
+            ])->all();
     }
 }

@@ -1,22 +1,15 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { PayrollHistoryList } from "@/components/dashboard/payroll-history-list";
 import { Button } from "@/components/ui/button";
 import { FieldShell, Input, Select, Textarea } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/modal";
 import { api, apiError, fieldErrors } from "@/lib/api";
 import type { ApiMessage, Member, PaymentMethod, SalaryEntryType, SalaryPaymentRecord, SalarySummary } from "@/lib/types";
-import { humanize, money, prettyDate, today } from "@/lib/utils";
+import { money, today } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
-const ENTRY_TYPE_TONE: Record<SalaryEntryType, "neutral" | "info" | "warning" | "success"> = {
-  payment: "neutral",
-  advance: "info",
-  loan: "warning",
-  write_off: "success",
-};
 
 export function SalaryPaymentModal({ businessId, member, open, onClose, currency }: { businessId: string | number; member: Member | null; open: boolean; onClose: () => void; currency: string }) {
   const [date, setDate] = useState(today());
@@ -137,22 +130,11 @@ export function SalaryPaymentModal({ businessId, member, open, onClose, currency
           <p className="mb-2 text-sm font-bold">History</p>
           {historyQuery.isLoading ? (
             <p className="text-xs text-[var(--ink-soft)]">Loading…</p>
-          ) : historyQuery.data?.payments.length ? (
-            <div className="max-h-64 space-y-2 overflow-y-auto scrollbar-thin">
-              {historyQuery.data.payments.map((payment) => (
-                <div key={payment.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-3 text-sm">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2"><Badge tone={ENTRY_TYPE_TONE[payment.entry_type]}>{payment.entry_type === "write_off" ? "Settled" : humanize(payment.entry_type)}</Badge><span className="text-xs text-[var(--ink-soft)]">{prettyDate(payment.payment_date)}</span></div>
-                    {payment.notes ? <p className="mt-1 truncate text-xs text-[var(--ink-soft)]">{payment.notes}</p> : null}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="font-black">{money(payment.amount, currency)}</p>
-                    <p className="text-[11px] text-[var(--ink-soft)]">{humanize(payment.method)}{payment.recorded_by ? ` · ${payment.recorded_by}` : ""}</p>
-                  </div>
-                </div>
-              ))}
+          ) : (
+            <div className="max-h-64 overflow-y-auto scrollbar-thin">
+              <PayrollHistoryList payments={historyQuery.data?.payments ?? []} currency={currency} />
             </div>
-          ) : <p className="text-xs text-[var(--ink-soft)]">No payments recorded yet.</p>}
+          )}
         </div>
       </div>
     </Modal>

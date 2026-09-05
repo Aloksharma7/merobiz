@@ -175,6 +175,7 @@ export default function BusinessDashboardPage() {
               <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">Given as a loan, separate from your regular pay. Ask an admin if you're unsure why.</p>
             </div>
           ) : null}
+          <div className="sm:col-span-2"><LinkButton href={`/b/${businessId}/my-pay`} variant="secondary" size="sm">View full pay history</LinkButton></div>
         </section>
       ) : null}
     </div>
