@@ -270,16 +270,30 @@ class DashboardService
 
         $isInstallment = $business->category === BusinessCategory::Installment;
 
-        $subtotal = (float) (clone $invoices)->sum('subtotal');
-        $discounts = (float) (clone $invoices)->sum('discount_amount');
-        $tax = (float) (clone $invoices)->sum('tax_amount');
-        $invoicedTotal = (float) (clone $invoices)->sum('total_amount');
+        // One aggregate query instead of eight separate SUM/COUNT round trips —
+        // this runs up to a dozen times per dashboard load (current period, prior
+        // period, month-to-date, and once per point on the 6-month trend chart).
+        $aggregate = (clone $invoices)->selectRaw(
+            'COALESCE(SUM(subtotal), 0) as subtotal, '.
+            'COALESCE(SUM(discount_amount), 0) as discount_amount, '.
+            'COALESCE(SUM(tax_amount), 0) as tax_amount, '.
+            'COALESCE(SUM(total_amount), 0) as total_amount, '.
+            'COALESCE(SUM(cost_amount), 0) as cost_amount, '.
+            'COALESCE(SUM(commission_amount), 0) as commission_amount, '.
+            'COALESCE(SUM(balance_amount), 0) as balance_amount, '.
+            'COUNT(*) as invoice_count'
+        )->first();
+
+        $subtotal = (float) $aggregate->subtotal;
+        $discounts = (float) $aggregate->discount_amount;
+        $tax = (float) $aggregate->tax_amount;
+        $invoicedTotal = (float) $aggregate->total_amount;
         // Installment/project businesses don't recognize invoice cost and margin
         // automatically — profit only counts once approved on the project.
-        $cost = $isInstallment ? 0.0 : (float) (clone $invoices)->sum('cost_amount');
-        $commissions = $isInstallment ? 0.0 : (float) (clone $invoices)->sum('commission_amount');
-        $receivables = (float) (clone $invoices)->sum('balance_amount');
-        $invoiceCount = (float) (clone $invoices)->count();
+        $cost = $isInstallment ? 0.0 : (float) $aggregate->cost_amount;
+        $commissions = $isInstallment ? 0.0 : (float) $aggregate->commission_amount;
+        $receivables = (float) $aggregate->balance_amount;
+        $invoiceCount = (float) $aggregate->invoice_count;
 
         $payments = $business->payments()
             ->whereBetween('payment_date', [$start->toDateString(), $end->toDateString()]);

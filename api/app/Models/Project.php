@@ -75,6 +75,15 @@ class Project extends Model
 
     public function collectedAmount(): float
     {
+        // Same reasoning as currentWriterAssignment() below — a list of many projects
+        // (the projects list, a customer's file history) eager-loads invoices up
+        // front, so reuse that instead of firing a SUM query per project.
+        if ($this->relationLoaded('invoices')) {
+            return (float) $this->invoices
+                ->filter(fn (Invoice $invoice) => in_array($invoice->status->value, self::LIVE_INVOICE_STATUSES, true))
+                ->sum(fn (Invoice $invoice) => (float) $invoice->paid_amount);
+        }
+
         return (float) $this->invoices()->whereIn('status', self::LIVE_INVOICE_STATUSES)->sum('paid_amount');
     }
 
@@ -87,6 +96,10 @@ class Project extends Model
 
     public function writerPaidAmount(): float
     {
+        if ($this->relationLoaded('writerPayments')) {
+            return (float) $this->writerPayments->sum(fn (WriterPayment $payment) => (float) $payment->amount);
+        }
+
         return (float) $this->writerPayments()->sum('amount');
     }
 
@@ -97,11 +110,22 @@ class Project extends Model
 
     public function approvedProfitTotal(): float
     {
+        if ($this->relationLoaded('profitApprovals')) {
+            return (float) $this->profitApprovals->sum(fn (ProjectProfitApproval $approval) => (float) $approval->amount);
+        }
+
         return (float) $this->profitApprovals()->sum('amount');
     }
 
     public function currentWriterAssignment(): ?ProjectWriterAssignment
     {
+        // Callers that list many projects at once (the projects list, a customer's
+        // or writer's file history) eager-load writerAssignments up front — reuse
+        // that instead of firing one extra query per project in the list.
+        if ($this->relationLoaded('writerAssignments')) {
+            return $this->writerAssignments->first(fn (ProjectWriterAssignment $assignment) => $assignment->assigned_to === null);
+        }
+
         return $this->writerAssignments()->whereNull('assigned_to')->with('writer')->first();
     }
 

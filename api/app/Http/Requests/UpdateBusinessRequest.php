@@ -49,6 +49,7 @@ class UpdateBusinessRequest extends FormRequest
             'settings.branding.show_logo_workspace' => ['sometimes', 'boolean'],
             'settings.branding.show_logo_invoice' => ['sometimes', 'boolean'],
             'settings.invoice' => ['sometimes', 'array'],
+            'settings.invoice.company_name' => ['nullable', 'string', 'max:190'],
             'settings.invoice.website' => ['nullable', 'string', 'max:190'],
             'settings.invoice.invoice_terms' => ['nullable', 'string', 'max:1500'],
             'settings.invoice.invoice_note' => ['nullable', 'string', 'max:1000'],

@@ -76,9 +76,11 @@ export default function PrintableInvoicePage() {
   const business = businessQuery.data;
   const invoice = invoiceQuery.data;
 
+  const companyName = business?.settings?.invoice?.company_name || business?.name;
+
   useEffect(() => {
-    if (business && invoice) document.title = `${invoice.invoice_number} - ${business.name}`;
-  }, [business, invoice]);
+    if (business && invoice) document.title = `${invoice.invoice_number} - ${companyName}`;
+  }, [business, invoice, companyName]);
 
   if (isLoading || !user || businessQuery.isLoading || invoiceQuery.isLoading) return <PageLoading />;
   if (businessQuery.isError || invoiceQuery.isError || !business || !invoice) {
@@ -144,7 +146,7 @@ export default function PrintableInvoicePage() {
             <div className="flex gap-4">
               {branding.showLogoInvoice ? <BusinessMark business={business} invoice className="h-14 min-w-14 rounded-lg print:h-12 print:min-w-12" imageClassName="p-1" /> : null}
               <div className="min-w-0">
-                <h1 className="text-[22px] font-black leading-tight tracking-[-0.025em] text-[#111a15] print:text-[19px]">{business.name}</h1>
+                <h1 className="text-[22px] font-black leading-tight tracking-[-0.025em] text-[#111a15] print:text-[19px]">{companyName}</h1>
                 {branding.tagline ? <p className="mt-1 text-[10px] font-semibold tracking-[0.02em] text-[#68736c] print:text-[8.5px]">{branding.tagline}</p> : null}
                 <div className="mt-2 space-y-0.5 text-[11px] leading-[1.45] text-[#4d5851] print:text-[9.5px]">
                   {visible.sellerAddress && business.address ? <p>{business.address}</p> : null}
@@ -285,14 +287,14 @@ export default function PrintableInvoicePage() {
                   <div className="mx-auto h-10 w-40 border-b border-[#202b25]" />
                   <p className="mt-1.5 text-[10px] font-bold">{settings.authorized_name || "Authorized Signature"}</p>
                   {settings.authorized_name ? <p className="text-[9px] text-[#68736c]">{settings.authorized_title || "Authorized Signatory"}</p> : null}
-                  <p className="mt-1 text-[8.5px] text-[#7a847e]">For {business.name}</p>
+                  <p className="mt-1 text-[8.5px] text-[#7a847e]">For {companyName}</p>
                 </div>
               ) : null}
             </section>
           ) : null}
 
           <footer className="mt-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-[#d4dad5] pt-3 text-[8.5px] text-[#7a847e] print:mt-4">
-            <span>{business.name}{visible.sellerPan && sellerPan ? ` · PAN ${sellerPan}` : ""}</span>
+            <span>{companyName}{visible.sellerPan && sellerPan ? ` · PAN ${sellerPan}` : ""}</span>
             <span>Invoice Ref: {invoice.invoice_number}</span>
           </footer>
         </div>

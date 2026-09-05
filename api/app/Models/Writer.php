@@ -13,7 +13,7 @@ class Writer extends Model
 
     /** @var array<int, string> */
     protected $fillable = [
-        'business_id', 'name', 'phone', 'email', 'notes', 'active',
+        'business_id', 'user_id', 'name', 'phone', 'email', 'notes', 'active',
     ];
 
     protected function casts(): array
@@ -26,6 +26,11 @@ class Writer extends Model
     public function business(): BelongsTo
     {
         return $this->belongsTo(Business::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function assignments(): HasMany

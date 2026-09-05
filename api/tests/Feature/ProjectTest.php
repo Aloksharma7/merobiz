@@ -285,4 +285,31 @@ class ProjectTest extends TestCase
             'ownership_percent' => 100,
         ])->assertCreated();
     }
+
+    public function test_listing_projects_does_not_issue_a_query_per_project_for_the_current_writer(): void
+    {
+        $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-list@example.test', 'password' => 'password']);
+        $business = $this->installmentBusiness($owner);
+
+        Sanctum::actingAs($owner);
+        $writer = $this->postJson("/api/businesses/{$business->id}/writers", ['name' => 'Rita Writer'])
+            ->assertCreated()->json('writer');
+
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson("/api/businesses/{$business->id}/projects", [
+                'client_name' => 'Client '.$i, 'topic' => 'Topic '.$i, 'course' => 'MBA', 'work' => 'Thesis',
+                'deal_amount' => 10000, 'writer_id' => $writer['id'],
+            ])->assertCreated();
+        }
+
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        $this->getJson("/api/businesses/{$business->id}/projects")->assertOk()->assertJsonCount(10, 'data');
+        $queryCount = count(\Illuminate\Support\Facades\DB::getQueryLog());
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+
+        // Each project's current-writer, collected/due, and profit totals used to
+        // re-query the database per project even with writerAssignments eager-loaded
+        // (56 queries for 10 projects before this was fixed). This stays flat now.
+        $this->assertLessThan(15, $queryCount, "Listing 10 projects issued {$queryCount} queries — check for a reintroduced N+1.");
+    }
 }

@@ -47,7 +47,15 @@ class ProjectController extends Controller
                         ->orWhere('topic', 'like', "%{$search}%");
                 });
             })
-            ->with(['writerAssignments' => fn ($query) => $query->whereNull('assigned_to')->with('writer')])
+            // ProjectResource computes collected/writer-paid/approved-profit totals per
+            // project — eager-load what those need so a page of projects costs a
+            // handful of queries total instead of several per project in the list.
+            ->with([
+                'writerAssignments' => fn ($query) => $query->whereNull('assigned_to')->with('writer'),
+                'invoices:id,project_id,status,paid_amount',
+                'writerPayments:id,project_id,amount',
+                'profitApprovals:id,project_id,amount',
+            ])
             ->latest('id')
             ->paginate((int) $request->query('per_page', 50));
 

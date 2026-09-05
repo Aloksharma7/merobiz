@@ -29,7 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const response = await api.get<User | { data: User }>("/auth/me");
       const payload = response.data;
-      return "data" in payload ? payload.data : payload;
+      const user = "data" in payload ? payload.data : payload;
+      // The businesses list rides along on this same response — seed its cache
+      // key directly so BusinessProvider's own query finds fresh data already
+      // there and skips firing a second round trip right after this one.
+      queryClient.setQueryData(["businesses"], user.businesses);
+      return user;
     },
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -40,17 +45,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await getCsrfCookie();
       const response = await api.post<ApiMessage<{ user: User }>>("/auth/login", input);
       queryClient.setQueryData(["auth", "me"], response.data.user);
-      await queryClient.invalidateQueries({ queryKey: ["businesses"] });
+      queryClient.setQueryData(["businesses"], response.data.user.businesses);
       const workspace = response.data.user.workspace;
       toast.success("Welcome back", {
         description: workspace?.mode === "employee" && workspace.business_name
           ? `${workspace.business_name} is ready.`
-          : "Your businesses are ready.",
+          : workspace?.mode === "writer"
+            ? "Your files are ready."
+            : "Your businesses are ready.",
       });
       router.replace(
-        workspace?.mode === "employee" && workspace.business_id
-          ? `/b/${workspace.business_id}`
-          : "/",
+        workspace?.mode === "writer"
+          ? "/writer"
+          : workspace?.mode === "employee" && workspace.business_id
+            ? `/b/${workspace.business_id}`
+            : "/",
       );
     } catch (error) {
       toast.error("Could not sign in", { description: apiError(error, "Check your email and password.") });
@@ -63,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await getCsrfCookie();
       const response = await api.post<ApiMessage<{ user: User }>>("/auth/register", input);
       queryClient.setQueryData(["auth", "me"], response.data.user);
+      queryClient.setQueryData(["businesses"], response.data.user.businesses);
       toast.success("Account created", { description: "Add your first business to begin." });
       router.replace("/businesses");
     } catch (error) {

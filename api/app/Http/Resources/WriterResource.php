@@ -18,6 +18,7 @@ class WriterResource extends JsonResource
             'email' => $this->email,
             'notes' => $this->notes,
             'active' => $this->active,
+            'has_login' => (bool) $this->user_id,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

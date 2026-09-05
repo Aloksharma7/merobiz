@@ -6,17 +6,23 @@ export type User = {
   initials: string;
   preferred_currency: string;
   workspace?: {
-    mode: "portfolio" | "employee";
+    mode: "portfolio" | "employee" | "writer";
     business_id?: number | null;
     business_name?: string | null;
     business_code?: string | null;
+    writer_id?: number | null;
   };
+  // Bundled onto /auth/me, /auth/login and /auth/register so the app's initial
+  // load (and every login/register) gets the user and their businesses in one
+  // round trip — see BusinessProvider, which seeds its own cache from this.
+  businesses: Business[];
 };
 
 export type BusinessType = "product" | "service" | "digital_subscription" | "mixed";
 export type BusinessRole = "owner" | "admin" | "employee";
 
 export type InvoiceBusinessSettings = {
+  company_name?: string | null;
   website?: string | null;
   invoice_terms?: string | null;
   invoice_note?: string | null;
@@ -204,6 +210,7 @@ export type Writer = {
   email?: string | null;
   notes?: string | null;
   active: boolean;
+  has_login: boolean;
   created_at: string;
 };
 
@@ -233,6 +240,7 @@ export type WriterPaymentRow = {
 
 export type WriterProfile = {
   writer: Writer;
+  business: { name: string; currency: string };
   period: { start: string; end: string; label: string };
   stats: {
     total_projects: number;

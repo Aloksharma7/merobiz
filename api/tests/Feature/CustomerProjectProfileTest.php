@@ -109,4 +109,30 @@ class CustomerProjectProfileTest extends TestCase
         $this->assertSame($done['id'], $response['payments'][0]['project_id']);
         $this->assertSame('Topic one', $response['payments'][0]['project_topic']);
     }
+
+    public function test_customer_profile_does_not_issue_a_query_per_project_for_collected_and_due_totals(): void
+    {
+        $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner4@example.test', 'password' => 'password']);
+        $business = $this->installmentBusiness($owner);
+
+        Sanctum::actingAs($owner);
+        $customerId = null;
+        for ($i = 0; $i < 8; $i++) {
+            $project = $this->postJson("/api/businesses/{$business->id}/projects", [
+                'client_name' => 'Repeat Client', 'topic' => 'Topic '.$i, 'course' => 'MBA', 'work' => 'Thesis',
+                'deal_amount' => 5000,
+            ])->assertCreated()->json('project');
+            $customerId = $project['customer_id'];
+        }
+
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        $this->getJson("/api/businesses/{$business->id}/customers/{$customerId}")
+            ->assertOk()->assertJsonCount(8, 'projects');
+        $queryCount = count(\Illuminate\Support\Facades\DB::getQueryLog());
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+
+        // Each project's collected/due amount used to re-query invoices per project
+        // even with writerAssignments eager-loaded. This stays flat regardless of count.
+        $this->assertLessThan(15, $queryCount, "Customer profile with 8 projects issued {$queryCount} queries — check for a reintroduced N+1.");
+    }
 }

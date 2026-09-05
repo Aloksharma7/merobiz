@@ -74,7 +74,10 @@ class CustomerController extends Controller
 
         if ($business->isInstallment()) {
             $projects = $customer->projects()
-                ->with(['writerAssignments' => fn ($query) => $query->whereNull('assigned_to')->with('writer')])
+                ->with([
+                    'writerAssignments' => fn ($query) => $query->whereNull('assigned_to')->with('writer'),
+                    'invoices:id,project_id,status,paid_amount',
+                ])
                 ->latest('id')
                 ->get();
 

@@ -1,7 +1,10 @@
 <?php
 
 $frontendOrigins = array_values(array_filter(array_map(
-    static fn (string $origin): string => trim($origin),
+    // A trailing slash here would make Access-Control-Allow-Origin fail to
+    // byte-match the browser's Origin header (which never has one), silently
+    // breaking every request — strip it regardless of how FRONTEND_URL is set.
+    static fn (string $origin): string => rtrim(trim($origin), '/'),
     explode(',', (string) env('FRONTEND_URL', 'http://localhost:3000'))
 )));
 

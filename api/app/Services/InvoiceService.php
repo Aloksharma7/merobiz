@@ -90,7 +90,11 @@ class InvoiceService
             }
 
             $netSales = Decimal::of($totals['subtotal'])->minus(Decimal::of($totals['discount_amount']));
-            $commission = $netSales
+            // Commission is earned on what the sale actually made the business, not on
+            // the revenue collected — a sale at or below cost earns no commission at all.
+            $grossProfit = $netSales->minus(Decimal::of($totals['cost_amount']));
+            $commissionableProfit = $grossProfit->isNegative() ? BigDecimal::zero() : $grossProfit;
+            $commission = $commissionableProfit
                 ->multipliedBy(Decimal::of($membership->commission_rate))
                 ->dividedBy(100, 2, RoundingMode::HalfUp);
 
@@ -175,7 +179,7 @@ class InvoiceService
             return $number;
         }
 
-        $number = sprintf('%s-%06d', mb_strtoupper($lockedBusiness->invoice_prefix), $lockedBusiness->invoice_next_number);
+        $number = (string) $lockedBusiness->invoice_next_number;
         $lockedBusiness->increment('invoice_next_number');
 
         return $number;

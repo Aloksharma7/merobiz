@@ -27,6 +27,7 @@ use App\Http\Controllers\SalaryController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\WriterController;
 use App\Http\Controllers\WriterPaymentController;
+use App\Http\Controllers\WriterSelfController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/public/businesses/{business}/logo', [BusinessController::class, 'logo']);
@@ -43,6 +44,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/portfolio/dashboard', PortfolioDashboardController::class);
     Route::get('/businesses', [BusinessController::class, 'index']);
     Route::post('/businesses', [BusinessController::class, 'store']);
+
+    Route::get('/writer/dashboard', [WriterSelfController::class, 'dashboard']);
 
     Route::prefix('personal')->group(function (): void {
         Route::get('/overview', PersonalOverviewController::class);

@@ -6,6 +6,7 @@ use App\Enums\BusinessRole;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -89,7 +90,12 @@ class User extends Authenticatable
         return $this->hasMany(PersonalExpense::class);
     }
 
-    /** @return array{mode: string, business_id?: int, business_name?: string, business_code?: string} */
+    public function writer(): HasOne
+    {
+        return $this->hasOne(Writer::class);
+    }
+
+    /** @return array{mode: string, business_id?: int, business_name?: string, business_code?: string, writer_id?: int} */
     public function resolveWorkspace(): array
     {
         $activeMemberships = $this->memberships()->where('active', true);
@@ -97,7 +103,7 @@ class User extends Authenticatable
             ->whereIn('role', [BusinessRole::Owner->value, BusinessRole::Admin->value])
             ->exists();
 
-        if ($hasPortfolioRole || ! (clone $activeMemberships)->exists()) {
+        if ($hasPortfolioRole) {
             return ['mode' => 'portfolio'];
         }
 
@@ -107,12 +113,30 @@ class User extends Authenticatable
             ->orderBy('id')
             ->first();
 
-        return [
-            'mode' => 'employee',
-            'business_id' => $membership?->business_id,
-            'business_name' => $membership?->business?->name,
-            'business_code' => $membership?->business?->code,
-        ];
+        if ($membership) {
+            return [
+                'mode' => 'employee',
+                'business_id' => $membership->business_id,
+                'business_name' => $membership->business?->name,
+                'business_code' => $membership->business?->code,
+            ];
+        }
+
+        // A writer never has a BusinessMembership — their login is a linked User
+        // record on their roster entry, so this is checked as a distinct fallback
+        // rather than being folded into the membership query above.
+        $writer = $this->writer()->with('business')->first();
+        if ($writer) {
+            return [
+                'mode' => 'writer',
+                'writer_id' => $writer->id,
+                'business_id' => $writer->business_id,
+                'business_name' => $writer->business?->name,
+                'business_code' => $writer->business?->code,
+            ];
+        }
+
+        return ['mode' => 'portfolio'];
     }
 
     protected function initials(): Attribute

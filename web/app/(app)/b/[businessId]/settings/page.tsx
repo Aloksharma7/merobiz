@@ -46,6 +46,7 @@ type FormState = {
   show_logo_workspace: boolean;
   show_logo_invoice: boolean;
   website: string;
+  company_name: string;
   invoice_terms: string;
   invoice_note: string;
   bank_name: string;
@@ -107,6 +108,7 @@ function toForm(business: Business): FormState {
     show_logo_workspace: business.settings?.branding?.show_logo_workspace ?? true,
     show_logo_invoice: business.settings?.branding?.show_logo_invoice ?? true,
     website: business.settings?.invoice?.website ?? "",
+    company_name: business.settings?.invoice?.company_name ?? "",
     invoice_terms: business.settings?.invoice?.invoice_terms ?? "",
     invoice_note: business.settings?.invoice?.invoice_note ?? "",
     bank_name: business.settings?.invoice?.bank_name ?? "",
@@ -174,7 +176,7 @@ export default function SettingsPage() {
         feature_installments,
         dash_overview_cards, dash_profit_breakdown, dash_quick_actions, dash_performance_trend, dash_top_products, dash_recent_invoices, dash_expense_mix,
         brand_tagline, brand_primary_color, brand_nav_color, brand_accent_color, show_logo_workspace, show_logo_invoice,
-        website, invoice_terms, invoice_note, bank_name, bank_account_name, bank_account_number, bank_branch, authorized_name, authorized_title,
+        website, company_name, invoice_terms, invoice_note, bank_name, bank_account_name, bank_account_number, bank_branch, authorized_name, authorized_title,
         show_seller_address, show_seller_phone, show_seller_email, show_seller_website, show_seller_pan,
         show_customer_address, show_customer_phone, show_customer_email, show_customer_pan,
         show_due_date, show_payment_mode, show_prepared_by, show_status, show_item_discount, show_item_tax,
@@ -213,6 +215,7 @@ export default function SettingsPage() {
           },
           invoice: {
             website: website || null,
+            company_name: company_name || null,
             invoice_terms: invoice_terms || null,
             invoice_note: invoice_note || null,
             bank_name: bank_name || null,
@@ -416,12 +419,12 @@ export default function SettingsPage() {
           <Card>
             <CardHeader title={<span className="flex items-center gap-2"><FileText size={18} className="text-[var(--brand)]" />Invoice defaults</span>} description="Applied automatically when staff create a sale; they can focus on the customer and items." />
             <CardBody className="space-y-4">
+              <FieldShell label="Company name on invoice" htmlFor="invoice-company-name" hint="Shown as the seller name on printed invoices. Leave blank to use the business name." error={errors["settings.invoice.company_name"]?.[0]}><Input id="invoice-company-name" value={form.company_name} onChange={(event) => update("company_name", event.target.value)} placeholder={business.name} /></FieldShell>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FieldShell label="Invoice prefix" htmlFor="invoice-prefix" hint="Example: AZ" error={errors.invoice_prefix?.[0]} required><Input id="invoice-prefix" value={form.invoice_prefix} onChange={(event) => update("invoice_prefix", event.target.value.toUpperCase())} maxLength={12} placeholder="e.g. AZ" required /></FieldShell>
                 <FieldShell label="Default tax rate" htmlFor="default-tax" hint="Percent" error={errors.default_tax_rate?.[0]} required><Input id="default-tax" type="number" min="0" max="100" step="0.01" placeholder="e.g. 13" value={form.default_tax_rate} onChange={(event) => update("default_tax_rate", event.target.value)} required /></FieldShell>
+                <FieldShell label="PAN number" htmlFor="pan-number" hint="Businesses sharing this PAN share one invoice sequence" error={errors.pan_number?.[0]}><Input id="pan-number" value={form.pan_number} onChange={(event) => update("pan_number", event.target.value)} placeholder="e.g. 301234567" /></FieldShell>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FieldShell label="PAN number" htmlFor="pan-number" hint="Businesses sharing this PAN share one invoice sequence" error={errors.pan_number?.[0]}><Input id="pan-number" value={form.pan_number} onChange={(event) => update("pan_number", event.target.value)} placeholder="e.g. 301234567" /></FieldShell>
                 <FieldShell label="VAT number" htmlFor="vat-number" error={errors.vat_number?.[0]}><Input id="vat-number" value={form.vat_number} onChange={(event) => update("vat_number", event.target.value)} placeholder="e.g. 600123456" /></FieldShell>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">

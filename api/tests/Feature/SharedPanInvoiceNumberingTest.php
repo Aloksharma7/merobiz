@@ -36,9 +36,9 @@ class SharedPanInvoiceNumberingTest extends TestCase
         $this->assertSame('1', $first->invoice_number);
         $this->assertSame('2', $second->invoice_number);
         $this->assertSame('3', $third->invoice_number);
-        // A business with no shared PAN keeps the original per-business prefixed format untouched.
-        $this->assertSame('SOLO-000001', $soloFirst->invoice_number);
-        $this->assertSame('SOLO-000002', $soloSecond->invoice_number);
+        // A business with no shared PAN gets its own plain per-business sequence — no code prefix.
+        $this->assertSame('1', $soloFirst->invoice_number);
+        $this->assertSame('2', $soloSecond->invoice_number);
     }
 
     private function invoice(InvoiceService $service, Business $business, User $owner)

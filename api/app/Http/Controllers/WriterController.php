@@ -5,20 +5,26 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreWriterRequest;
 use App\Http\Resources\WriterResource;
 use App\Models\Business;
-use App\Models\Project;
+use App\Models\User;
 use App\Models\Writer;
 use App\Services\AuditService;
+use App\Services\WriterProfileService;
 use App\Support\AuthorizesBusinessActions;
 use App\Support\DateRange;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class WriterController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly WriterProfileService $profiles,
+    ) {}
 
     public function index(Request $request, Business $business): AnonymousResourceCollection
     {
@@ -47,71 +53,24 @@ class WriterController extends Controller
 
         $range = DateRange::fromRequest($request);
 
-        $projects = $business->projects()
-            ->whereHas('writerAssignments', fn ($query) => $query->where('writer_id', $writer->id))
-            ->with(['writerAssignments' => fn ($query) => $query->where('writer_id', $writer->id)->orderByDesc('assigned_from')])
-            ->latest('id')
-            ->get();
-
-        $currentProjects = $projects->filter(fn (Project $project) => $project->writerAssignments
-            ->contains(fn ($assignment) => $assignment->assigned_to === null));
-
-        $totalPaid = (float) $writer->payments()->sum('amount');
-        $totalDue = (float) $currentProjects->sum(fn (Project $project) => $project->writerDueAmount());
-
-        $periodPayments = $writer->payments()
-            ->with('project:id,client_name')
-            ->whereBetween('paid_on', [$range->start->toDateString(), $range->end->toDateString()])
-            ->orderByDesc('paid_on')
-            ->get();
-
-        return response()->json([
-            'writer' => new WriterResource($writer),
-            'period' => $range->toArray(),
-            'stats' => [
-                'total_projects' => $projects->count(),
-                'current_projects' => $currentProjects->count(),
-                'total_agreed' => round((float) $projects->sum('writer_payment_amount'), 2),
-                'total_paid' => round($totalPaid, 2),
-                'total_due' => round($totalDue, 2),
-                'period_paid' => round((float) $periodPayments->sum('amount'), 2),
-            ],
-            'payments' => $periodPayments->map(fn ($payment): array => [
-                'id' => $payment->id,
-                'project_id' => $payment->project_id,
-                'client_name' => $payment->project?->client_name,
-                'paid_on' => $payment->paid_on->toDateString(),
-                'amount' => (float) $payment->amount,
-                'notes' => $payment->notes,
-            ])->values(),
-            'projects' => $projects->map(function (Project $project) use ($writer) {
-                $assignment = $project->writerAssignments->first();
-                $isCurrent = $assignment && $assignment->assigned_to === null;
-                $paidForThisProject = (float) $project->writerPayments()->where('writer_id', $writer->id)->sum('amount');
-
-                return [
-                    'id' => $project->id,
-                    'client_name' => $project->client_name,
-                    'topic' => $project->topic,
-                    'course' => $project->course,
-                    'work' => $project->work,
-                    'work_status' => $project->work_status->value,
-                    'writer_payment_amount' => (float) $project->writer_payment_amount,
-                    'writer_paid_amount' => round($paidForThisProject, 2),
-                    'writer_due_amount' => $isCurrent ? round($project->writerDueAmount(), 2) : null,
-                    'is_current' => $isCurrent,
-                    'assigned_from' => $assignment?->assigned_from->toDateString(),
-                    'assigned_to' => $assignment?->assigned_to?->toDateString(),
-                ];
-            })->values(),
-        ]);
+        return response()->json($this->profiles->build($business, $writer, $range));
     }
 
     public function store(StoreWriterRequest $request, Business $business): JsonResponse
     {
         $this->requirePermission($request, 'writers.manage');
         abort_unless($business->isInstallment(), 422, 'Writers are only available for installment-category businesses.');
-        $writer = $business->writers()->create($request->validated());
+
+        $data = $request->validated();
+        $writer = DB::transaction(function () use ($business, $data): Writer {
+            $userId = $this->resolveLoginUserId($business, $data);
+
+            return $business->writers()->create([
+                ...collect($data)->except('password')->all(),
+                'user_id' => $userId,
+            ]);
+        });
+
         $this->audit->record($request->user(), $business, 'writer.created', $writer, null, $writer->toArray(), $request);
 
         return response()->json(['message' => 'Writer added.', 'writer' => new WriterResource($writer)], 201);
@@ -122,10 +81,58 @@ class WriterController extends Controller
         $this->requirePermission($request, 'writers.manage');
         $this->assertBusiness($business, $writer);
         $before = $writer->toArray();
-        $writer->update($request->validated());
+
+        $data = $request->validated();
+        DB::transaction(function () use ($writer, $business, $data): void {
+            $userId = $this->resolveLoginUserId($business, $data, $writer);
+
+            $writer->update([
+                ...collect($data)->except('password')->all(),
+                'user_id' => $userId ?? $writer->user_id,
+            ]);
+        });
+
         $this->audit->record($request->user(), $business, 'writer.updated', $writer, $before, $writer->fresh()->toArray(), $request);
 
         return response()->json(['message' => 'Writer updated.', 'writer' => new WriterResource($writer->fresh())]);
+    }
+
+    /**
+     * Mirrors TeamController::store()'s find-or-create-by-email pattern: giving a
+     * writer login access reuses an existing User by email, or creates one with the
+     * given temporary password. Returns null when no login is being set up (or
+     * changed) so the caller can leave an existing link untouched.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveLoginUserId(Business $business, array $data, ?Writer $writer = null): ?int
+    {
+        if (empty($data['password'])) {
+            return null;
+        }
+
+        if (empty($data['email'])) {
+            throw ValidationException::withMessages(['email' => 'An email is required to set up writer login.']);
+        }
+
+        $email = mb_strtolower($data['email']);
+        $user = User::query()->where('email', $email)->first();
+
+        if ($user && $writer && $writer->user_id && $writer->user_id !== $user->id) {
+            throw ValidationException::withMessages(['email' => 'This email belongs to a different account already.']);
+        }
+
+        if (! $user) {
+            $user = User::query()->create([
+                'name' => $data['name'] ?? $writer?->name,
+                'email' => $email,
+                'phone' => $data['phone'] ?? $writer?->phone,
+                'password' => $data['password'],
+                'preferred_currency' => $business->currency,
+            ]);
+        }
+
+        return $user->id;
     }
 
     public function destroy(Request $request, Business $business, Writer $writer): JsonResponse

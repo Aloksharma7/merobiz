@@ -45,6 +45,11 @@ class TeamController extends Controller
             ->get()
             ->keyBy('created_by');
 
+        // currentOwnershipFor() reuses an eager-loaded relation when present (see
+        // Business::currentOwnershipFor) — load every relevant user's ownership
+        // periods once here instead of one query per team member below.
+        $business->load(['ownerships' => fn ($query) => $query->whereIn('user_id', $memberships->pluck('user_id'))]);
+
         $rows = $memberships->map(function (BusinessMembership $membership) use ($business, $range, $stats): array {
             $row = $stats->get($membership->user_id);
             $ownership = $business->currentOwnershipFor($membership->user, $range->end);

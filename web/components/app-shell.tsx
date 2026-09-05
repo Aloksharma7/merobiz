@@ -120,6 +120,13 @@ function Shell({ children }: { children: ReactNode }) {
     if (!isEmployeePathAllowed(pathname, base)) router.replace(base);
   }, [assignedBusinessId, businessesLoading, employeeWorkspace, pathname, router]);
 
+  useEffect(() => {
+    // A writer login has no BusinessMembership at all, so none of this shell's
+    // business-scoped pages apply to them — they only ever see their own
+    // dedicated read-only dashboard, not the staff/owner app shell.
+    if (user?.workspace?.mode === "writer") router.replace("/writer");
+  }, [router, user]);
+
   const portfolioNav: NavItem[] = employeeWorkspace ? [] : [
     { label: "Overview", href: "/", icon: LayoutDashboard, exact: true },
     { label: "Businesses", href: "/businesses", icon: Building2 },
@@ -314,6 +321,10 @@ function Shell({ children }: { children: ReactNode }) {
           ) : null}
           <div className="grid gap-2">
             {mobileItems.map((item) => { const Icon = item.icon; return <Link key={item.href} href={item.href} onClick={() => setMobileMenu(false)} className={cn("flex min-h-12 items-center gap-3 rounded-xl border px-3.5 text-sm font-semibold", isActive(pathname, item) ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-deep)]" : "border-[var(--line)] bg-white")}><Icon size={18} />{item.label}</Link>; })}
+          </div>
+          <div className="border-t border-[var(--line)] pt-4">
+            <div className="flex items-center gap-3 rounded-2xl bg-[var(--surface-soft)] p-3.5"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--brand)] text-sm font-black text-[var(--on-brand)]">{user?.initials}</span><div className="min-w-0"><p className="truncate text-sm font-bold">{user?.name}</p><p className="truncate text-xs text-[var(--ink-soft)]">{user?.email}</p></div></div>
+            <Button className="mt-3 w-full" variant="secondary" leftIcon={<LogOut size={17} />} onClick={() => { setMobileMenu(false); void logout(); }}>Sign out</Button>
           </div>
         </div>
       </Modal>

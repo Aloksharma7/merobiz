@@ -90,7 +90,8 @@ class SaleVerificationTest extends TestCase
         // The sale is part of business totals immediately.
         $this->assertSame(1000.0, $financialMetrics['net_sales']);
         $this->assertSame(500.0, $financialMetrics['cost_of_sales']);
-        $this->assertSame(50.0, $financialMetrics['commissions']);
+        // Commission is earned on gross profit (1000 - 500 cost = 500), not on the full sale.
+        $this->assertSame(25.0, $financialMetrics['commissions']);
 
         Sanctum::actingAs($employee);
         $this->getJson("/api/businesses/{$business->id}/products")

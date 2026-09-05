@@ -133,6 +133,18 @@ class Business extends Model
     {
         $date = $asOf ? CarbonImmutable::parse($asOf) : CarbonImmutable::now();
 
+        if ($this->relationLoaded('ownerships')) {
+            return $this->ownerships
+                ->where('user_id', $user->id)
+                ->sortByDesc('effective_from')
+                ->first(function (OwnershipPeriod $period) use ($date): bool {
+                    $from = CarbonImmutable::parse($period->effective_from);
+                    $to = $period->effective_to ? CarbonImmutable::parse($period->effective_to) : null;
+
+                    return $from->lessThanOrEqualTo($date) && (! $to || $to->greaterThanOrEqualTo($date));
+                });
+        }
+
         return $this->ownerships()
             ->where('user_id', $user->id)
             ->whereDate('effective_from', '<=', $date->toDateString())

@@ -18,6 +18,7 @@ class StoreWriterRequest extends FormRequest
             'name' => ['required', 'string', 'max:180'],
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:190'],
+            'password' => ['nullable', 'string', 'min:8'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'active' => ['sometimes', 'boolean'],
         ];

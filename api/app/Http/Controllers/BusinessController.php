@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateBusinessRequest;
 use App\Http\Resources\BusinessResource;
 use App\Models\Business;
 use App\Services\AuditService;
+use App\Services\BusinessListingService;
 use App\Support\AuthorizesBusinessActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,29 +27,9 @@ class BusinessController extends Controller
     {
     }
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request, BusinessListingService $businesses): AnonymousResourceCollection
     {
-        $activeMemberships = $request->user()->memberships()->where('active', true);
-        $hasPortfolioRole = (clone $activeMemberships)
-            ->whereIn('role', [BusinessRole::Owner->value, BusinessRole::Admin->value])
-            ->exists();
-
-        $employeeBusinessId = $hasPortfolioRole
-            ? null
-            : (clone $activeMemberships)
-                ->where('role', BusinessRole::Employee->value)
-                ->orderBy('id')
-                ->value('business_id');
-
-        $businesses = Business::query()
-            ->whereHas('memberships', fn ($query) => $query
-                ->where('user_id', $request->user()->id)
-                ->where('active', true))
-            ->when($employeeBusinessId, fn ($query) => $query->whereKey($employeeBusinessId))
-            ->orderBy('name')
-            ->get();
-
-        return BusinessResource::collection($businesses);
+        return BusinessResource::collection($businesses->visibleFor($request->user()));
     }
 
     public function store(StoreBusinessRequest $request): JsonResponse
