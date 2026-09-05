@@ -52,41 +52,62 @@ class TeamController extends Controller
         // periods once here instead of one query per team member below.
         $business->load(['ownerships' => fn ($query) => $query->whereIn('user_id', $memberships->pluck('user_id'))]);
 
-        $rows = $memberships->map(function (BusinessMembership $membership) use ($business, $range, $stats): array {
-            $row = $stats->get($membership->user_id);
-            $ownership = $business->currentOwnershipFor($membership->user, $range->end);
-            $salary = $this->salary->summaryFor($membership);
-
-            return [
-                'id' => $membership->id,
-                'business_id' => $business->id,
-                'user_id' => $membership->user_id,
-                'name' => $membership->user->name,
-                'email' => $membership->user->email,
-                'phone' => $membership->user->phone,
-                'initials' => $membership->user->initials,
-                'role' => $membership->role->value,
-                'full_control' => $membership->full_control,
-                'is_founder' => $membership->user_id === $business->owner_id,
-                'title' => $membership->title,
-                'commission_rate' => (float) $membership->commission_rate,
-                'active' => $membership->active,
-                'joined_at' => $membership->joined_at?->toDateString(),
-                'sales' => round((float) ($row->sales ?? 0), 2),
-                'invoice_count' => (int) ($row->invoice_count ?? 0),
-                'commission_earned' => round((float) ($row->commission ?? 0), 2),
-                'ownership_percent' => $ownership ? (float) $ownership->ownership_percent : 0.0,
-                'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
-                'pay_type' => $salary['pay_type'],
-                'salary_amount' => $salary['salary_amount'],
-                'salary_visible_to_staff' => $salary['salary_visible_to_staff'],
-                'salary_paid_total' => $salary['paid_total'],
-                'salary_pending' => $salary['pending'],
-                'outstanding_loan' => $salary['outstanding_loan'],
-            ];
-        });
+        $rows = $memberships->map(fn (BusinessMembership $membership): array => $this->mapMemberRow($business, $membership, $range, $stats->get($membership->user_id)));
 
         return response()->json(['data' => $rows->values()]);
+    }
+
+    public function show(Request $request, Business $business, BusinessMembership $membership): JsonResponse
+    {
+        $this->requirePermission($request, 'team.manage');
+        abort_unless($membership->business_id === $business->id, 404);
+        $membership->load('user:id,name,email,phone');
+        $range = DateRange::fromRequest($request);
+
+        $stats = Invoice::query()
+            ->where('business_id', $business->id)
+            ->where('created_by', $membership->user_id)
+            ->whereBetween('invoice_date', [$range->start->toDateString(), $range->end->toDateString()])
+            ->whereIn('status', DashboardService::LIVE_INVOICE_STATUSES)
+            ->selectRaw('SUM(subtotal - discount_amount) as sales, SUM(commission_amount) as commission, COUNT(*) as invoice_count')
+            ->first();
+
+        return response()->json(['data' => $this->mapMemberRow($business, $membership, $range, $stats)]);
+    }
+
+    /** @return array<string, mixed> */
+    private function mapMemberRow(Business $business, BusinessMembership $membership, DateRange $range, ?object $row): array
+    {
+        $ownership = $business->currentOwnershipFor($membership->user, $range->end);
+        $salary = $this->salary->summaryFor($membership);
+
+        return [
+            'id' => $membership->id,
+            'business_id' => $business->id,
+            'user_id' => $membership->user_id,
+            'name' => $membership->user->name,
+            'email' => $membership->user->email,
+            'phone' => $membership->user->phone,
+            'initials' => $membership->user->initials,
+            'role' => $membership->role->value,
+            'full_control' => $membership->full_control,
+            'is_founder' => $membership->user_id === $business->owner_id,
+            'title' => $membership->title,
+            'commission_rate' => (float) $membership->commission_rate,
+            'active' => $membership->active,
+            'joined_at' => $membership->joined_at?->toDateString(),
+            'sales' => round((float) ($row->sales ?? 0), 2),
+            'invoice_count' => (int) ($row->invoice_count ?? 0),
+            'commission_earned' => round((float) ($row->commission ?? 0), 2),
+            'ownership_percent' => $ownership ? (float) $ownership->ownership_percent : 0.0,
+            'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
+            'pay_type' => $salary['pay_type'],
+            'salary_amount' => $salary['salary_amount'],
+            'salary_visible_to_staff' => $salary['salary_visible_to_staff'],
+            'salary_paid_total' => $salary['paid_total'],
+            'salary_pending' => $salary['pending'],
+            'outstanding_loan' => $salary['outstanding_loan'],
+        ];
     }
 
     public function export(Request $request, Business $business): StreamedResponse

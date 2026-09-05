@@ -112,6 +112,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::get('/team', [TeamController::class, 'index']);
             Route::get('/team/export', [TeamController::class, 'export']);
             Route::post('/team', [TeamController::class, 'store']);
+            Route::get('/team/{membership}', [TeamController::class, 'show']);
             Route::patch('/team/{membership}', [TeamController::class, 'update']);
             Route::get('/team/{membership}/salary', [SalaryController::class, 'index']);
             Route::post('/team/{membership}/salary/payments', [SalaryController::class, 'pay']);
