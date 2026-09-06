@@ -12,7 +12,7 @@ class ProfitPeriod extends Model
     /** @var array<int, string> */
     protected $fillable = [
         'business_id', 'start_date', 'end_date', 'status', 'net_sales', 'tax_collected',
-        'cost_of_sales', 'gross_profit', 'expenses', 'commissions', 'net_profit',
+        'cost_of_sales', 'gross_profit', 'expenses', 'commissions', 'payroll_cost', 'net_profit',
         'closed_by', 'closed_at', 'notes',
     ];
 
@@ -28,6 +28,7 @@ class ProfitPeriod extends Model
             'gross_profit' => 'decimal:2',
             'expenses' => 'decimal:2',
             'commissions' => 'decimal:2',
+            'payroll_cost' => 'decimal:2',
             'net_profit' => 'decimal:2',
             'closed_at' => 'datetime',
         ];

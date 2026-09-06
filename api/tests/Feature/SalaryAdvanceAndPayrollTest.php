@@ -78,7 +78,7 @@ class SalaryAdvanceAndPayrollTest extends TestCase
             ->assertJsonPath('summary.pending', 2000);
     }
 
-    public function test_fixed_salary_payroll_reduces_net_profit_but_commission_payout_does_not_double_count(): void
+    public function test_any_actual_payroll_payment_reduces_net_profit_regardless_of_pay_type(): void
     {
         $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-payroll@example.test', 'password' => 'password']);
         $salaried = User::query()->create(['name' => 'Salaried', 'email' => 'salaried@example.test', 'password' => 'password']);
@@ -88,7 +88,7 @@ class SalaryAdvanceAndPayrollTest extends TestCase
             'user_id' => $salaried->id, 'role' => BusinessRole::Employee, 'active' => true,
             'pay_type' => 'fixed_salary', 'salary_amount' => 30000, 'joined_at' => today()->toDateString(),
         ]);
-        $business->memberships()->create([
+        $commissionedMembership = $business->memberships()->create([
             'user_id' => $commissioned->id, 'role' => BusinessRole::Employee, 'active' => true,
             'pay_type' => 'commission', 'commission_rate' => 10,
         ]);
@@ -105,21 +105,26 @@ class SalaryAdvanceAndPayrollTest extends TestCase
         $start = CarbonImmutable::today()->startOfMonth();
         $end = CarbonImmutable::today()->endOfMonth();
 
-        // Before any salary is paid: only the accrued commission (100) reduces profit.
+        // Before anyone is actually paid: the accrued commission (100) is purely
+        // informational — nothing has left the business yet, so profit is untouched.
         $before = $dashboard->metrics($business->fresh(), $start, $end);
-        $this->assertSame(0.0, $before['salary_cost']);
+        $this->assertSame(0.0, $before['payroll_cost']);
         $this->assertSame(100.0, $before['commissions']);
-        $this->assertSame(900.0, $before['net_profit']);
+        $this->assertSame(1000.0, $before['net_profit']);
 
         Sanctum::actingAs($owner);
-        // Paying out that same commission must not reduce net profit again — it was
-        // already recognized as an expense when the sale happened.
         $this->postJson("/api/businesses/{$business->id}/team/{$salariedMembership->id}/salary/payments", [
             'payment_date' => today()->toDateString(), 'amount' => 30000, 'method' => 'bank_transfer',
         ])->assertCreated();
 
+        // Paying the commissioned employee their accrued 100 must ALSO reduce profit —
+        // that's real money leaving the business, and nothing counted it beforehand.
+        $this->postJson("/api/businesses/{$business->id}/team/{$commissionedMembership->id}/salary/payments", [
+            'payment_date' => today()->toDateString(), 'amount' => 100, 'method' => 'cash',
+        ])->assertCreated();
+
         $after = $dashboard->metrics($business->fresh(), $start, $end);
-        $this->assertSame(30000.0, $after['salary_cost']);
+        $this->assertSame(30100.0, $after['payroll_cost']);
         $this->assertSame(100.0, $after['commissions']);
         $this->assertSame(-29100.0, $after['net_profit']);
     }
@@ -152,6 +157,40 @@ class SalaryAdvanceAndPayrollTest extends TestCase
 
         // Once forgiven, it's a real loss.
         $this->assertSame(-1000.0, $dashboard->metrics($business->fresh(), $start, $end)['net_profit']);
+    }
+
+    public function test_closing_a_profit_period_snapshots_actual_payroll_cost_separately_from_accrued_commission(): void
+    {
+        $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-close@example.test', 'password' => 'password']);
+        $employee = User::query()->create(['name' => 'Employee', 'email' => 'employee-close@example.test', 'password' => 'password']);
+        $business = $this->business($owner);
+        $membership = $business->memberships()->create([
+            'user_id' => $employee->id, 'role' => BusinessRole::Employee, 'active' => true, 'pay_type' => 'commission', 'commission_rate' => 10,
+        ]);
+        $product = $business->products()->create([
+            'name' => 'Service', 'type' => 'service', 'unit' => 'session', 'sale_price' => 1000, 'cost_price' => 0, 'tax_rate' => 0, 'active' => true,
+        ]);
+
+        app(\App\Services\InvoiceService::class)->create($business, $employee, [
+            'customer_name' => 'Walk-in', 'invoice_date' => today()->toDateString(), 'status' => 'issued', 'discount_amount' => 0,
+            'items' => [['product_id' => $product->id, 'description' => 'Service', 'quantity' => 1, 'unit_price' => 1000, 'discount_amount' => 0, 'tax_rate' => 0]],
+        ]);
+
+        Sanctum::actingAs($owner);
+        $this->postJson("/api/businesses/{$business->id}/team/{$membership->id}/salary/payments", [
+            'payment_date' => today()->toDateString(), 'amount' => 60, 'method' => 'cash',
+        ])->assertCreated();
+
+        $period = app(\App\Services\ProfitClosingService::class)->close($business, $owner, [
+            'start_date' => today()->startOfMonth()->toDateString(),
+            'end_date' => today()->endOfMonth()->toDateString(),
+        ]);
+
+        // Only the 60 actually paid is the real cost — the other 40 of the 100
+        // accrued commission is still just an estimate, unpaid, not yet a loss.
+        $this->assertSame('100.00', (string) $period->commissions);
+        $this->assertSame('60.00', (string) $period->payroll_cost);
+        $this->assertSame('940.00', (string) $period->net_profit);
     }
 
     public function test_only_team_manage_can_pay_or_write_off_salary(): void

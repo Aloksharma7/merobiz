@@ -100,9 +100,10 @@ export default function BusinessDashboardPage() {
           {[
             ["Expected gross profit", data.summary.gross_profit, "Sales minus direct cost"],
             ["Approved expenses", data.summary.expenses, "Operating costs"],
-            ["Staff commissions", data.summary.commissions, "Generated from sales"],
+            ["Payroll paid", data.summary.payroll_cost, "Actual salary, commission and advance payouts"],
             ["Expected net profit", data.summary.net_profit, "Before owner distribution, not yet withdrawn"],
           ].map(([label, value, note]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(Number(value), currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">{String(note)}</p></div>)}
+          <div className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5 sm:col-span-2 xl:col-span-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Commission accrued (estimated)</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(data.summary.commissions, currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">What commission-based staff are estimated to be owed from their sales so far — this only reduces profit once actually paid out from their Payroll page, alongside everyone else's payments.</p></div>
         </section>
       ) : null}
 

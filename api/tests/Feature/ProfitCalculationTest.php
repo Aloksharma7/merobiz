@@ -89,10 +89,13 @@ class ProfitCalculationTest extends TestCase
 
         $this->assertSame(1000.0, $metrics['net_sales']);
         $this->assertSame(600.0, $metrics['cost_of_sales']);
-        // Commission is earned on gross profit (1000 - 600 cost = 400), not on the full sale.
+        // Commission is earned on gross profit (1000 - 600 cost = 400), not on the full
+        // sale — but this figure is informational (what the employee is estimated to be
+        // owed) and isn't subtracted from profit until it's actually paid out.
         $this->assertSame(40.0, $metrics['commissions']);
         $this->assertSame(100.0, $metrics['expenses']);
-        $this->assertSame(260.0, $metrics['net_profit']);
-        $this->assertSame(104.0, $dashboard->attributableProfit($owner, $business, $start, $end));
+        $this->assertSame(0.0, $metrics['payroll_cost']);
+        $this->assertSame(300.0, $metrics['net_profit']);
+        $this->assertSame(120.0, $dashboard->attributableProfit($owner, $business, $start, $end));
     }
 }

@@ -53,6 +53,7 @@ class ProfitClosingService
                 'gross_profit' => $metrics['gross_profit'],
                 'expenses' => $metrics['expenses'],
                 'commissions' => $metrics['commissions'],
+                'payroll_cost' => $metrics['payroll_cost'],
                 'net_profit' => $metrics['net_profit'],
                 'closed_by' => $actor->id,
                 'closed_at' => now(),

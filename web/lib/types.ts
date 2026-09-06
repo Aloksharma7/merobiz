@@ -500,6 +500,7 @@ export type ProfitPeriod = {
   gross_profit: number;
   expenses: number;
   commissions: number;
+  payroll_cost: number;
   net_profit: number;
   notes?: string | null;
   closed_at?: string | null;
@@ -529,6 +530,7 @@ export type MetricSummary = {
   gross_profit: number;
   expenses: number;
   commissions: number;
+  payroll_cost: number;
   net_profit: number;
   cash_collected: number;
   receivables: number;
@@ -713,6 +715,7 @@ export type ProfitLossReport = {
     gross_profit: number;
     expenses: number;
     commissions: number;
+    payroll_cost: number;
     net_profit: number;
     tax_collected: number;
     cash_collected: number;

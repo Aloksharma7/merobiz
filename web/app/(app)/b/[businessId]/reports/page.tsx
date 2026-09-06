@@ -89,14 +89,14 @@ export default function ReportsPage() {
             <ProfitLine label="Direct cost of sales" value={-report.cost_of_sales} currency={currency} subdued />
             <ProfitLine label="Gross profit" value={report.gross_profit} currency={currency} subtotal />
             <ProfitLine label="Approved operating expenses" value={-report.expenses} currency={currency} subdued />
-            <ProfitLine label="Employee commissions" value={-report.commissions} currency={currency} subdued />
+            <ProfitLine label="Payroll paid" value={-report.payroll_cost} currency={currency} subdued />
             <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--brand-deep)] px-4 py-4 text-[var(--on-brand-deep)]">
               <div><p className="text-xs font-semibold text-[var(--on-brand-deep)]/60">Business net profit</p><p className="mt-1 text-[11px] text-[var(--on-brand-deep)]/45">Before partner distribution</p></div>
               <p className="text-xl font-black tracking-[-0.03em]">{money(report.net_profit, currency)}</p>
             </div>
             <div className="mt-4 flex items-start gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4 text-sm leading-6 text-[var(--ink-soft)]">
               <Scale size={18} className="mt-0.5 shrink-0 text-[var(--brand)]" />
-              <p>This is a live calculation. Close a period only after invoices, costs, commissions and approved expenses are complete; the close creates dated partner allocations.</p>
+              <p>This is a live calculation. Close a period only after invoices, costs and approved expenses are complete; the close creates dated partner allocations. Commission accrued so far ({money(report.commissions, currency)}) is estimated and only reduces profit once actually paid from a team member's Payroll page.</p>
             </div>
           </CardBody>
         </Card>
@@ -127,7 +127,7 @@ export default function ReportsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-right sm:grid-cols-3">
                     <SmallValue label="Net sales" value={money(period.net_sales, currency)} />
-                    <SmallValue label="Expenses" value={money(period.expenses + period.commissions, currency)} />
+                    <SmallValue label="Expenses" value={money(period.expenses + period.payroll_cost, currency)} />
                     <SmallValue label="Net profit" value={money(period.net_profit, currency)} strong />
                   </div>
                 </div>
