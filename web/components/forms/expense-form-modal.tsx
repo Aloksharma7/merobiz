@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const blank = { category: "", vendor: "", expense_date: today(), amount: "", tax_amount: "0", payment_method: "cash" as PaymentMethod, reference: "", notes: "", already_in_sale_price: false };
+const blank = { category: "", vendor: "", expense_date: today(), amount: "", tax_amount: "0", payment_method: "bank_transfer" as PaymentMethod, reference: "", notes: "", already_in_sale_price: false };
 
 export function ExpenseFormModal({ businessId, open, onClose }: { businessId: string | number; open: boolean; onClose: () => void }) {
   const [form, setForm] = useState(blank);

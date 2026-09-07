@@ -76,7 +76,7 @@ export function SaleFormModal({
   const nextInstallmentKey = useRef(1);
   const [amountReceived, setAmountReceived] = useState("0");
   const [amountReceivedTouched, setAmountReceivedTouched] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const queryClient = useQueryClient();
 
@@ -100,7 +100,7 @@ export function SaleFormModal({
       setInstallments([]);
       setAmountReceived("0");
       setAmountReceivedTouched(false);
-      setPaymentMethod("cash");
+      setPaymentMethod("bank_transfer");
       setErrors({});
     }
   }, [defaultTax, open]);
