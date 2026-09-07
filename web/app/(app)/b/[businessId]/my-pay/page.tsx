@@ -37,7 +37,7 @@ export default function MyPayPage() {
       {data.visible ? (
         <>
           <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <Mini label={data.pay_type === "fixed_salary" ? "Monthly rate" : "Pay type"} value={data.pay_type === "fixed_salary" ? money(data.salary_amount, currency) : "Commission"} />
+            <Mini label={data.pay_type === "fixed_salary" ? "Monthly rate" : "Pay type"} value={data.pay_type === "fixed_salary" ? money(data.salary_amount, currency) : "Profit based"} />
             <Mini label="Earned so far" value={money(data.accrued, currency)} />
             <Mini label="Paid so far" value={money(data.paid_total, currency)} />
             <Mini label={data.pending < 0 ? "Overpaid" : "Owed"} value={money(Math.abs(data.pending), currency)} emphasis={data.pending !== 0} danger={data.pending < 0} />

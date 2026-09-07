@@ -17,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class SalaryService
 {
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly DashboardService $dashboard,
+    ) {}
 
     /** @return array<string, mixed> */
     public function summaryFor(BusinessMembership $membership): array
@@ -29,7 +32,12 @@ class SalaryService
         if ($membership->pay_type === PayType::FixedSalary) {
             $monthsElapsed = $this->monthsElapsed($membership);
             $accrued = Decimal::of($membership->salary_amount)->multipliedBy($monthsElapsed);
+        } elseif ($membership->pay_type === PayType::ProfitShare) {
+            $monthsElapsed = 0;
+            $accrued = Decimal::of($this->lifetimeProfitShareEarned($membership));
         } else {
+            // Dormant: commission is disabled business-wide, but existing rows
+            // (or a future re-enable) still resolve through the original formula.
             $monthsElapsed = 0;
             $accrued = Decimal::of($this->lifetimeCommissionEarned($membership));
         }
@@ -62,6 +70,14 @@ class SalaryService
             ->where('created_by', $membership->user_id)
             ->whereIn('status', DashboardService::LIVE_INVOICE_STATUSES)
             ->sum('commission_amount');
+    }
+
+    private function lifetimeProfitShareEarned(BusinessMembership $membership): string
+    {
+        $start = CarbonImmutable::parse($membership->business->created_at)->startOfDay();
+        $end = CarbonImmutable::now();
+
+        return (string) $this->dashboard->attributableProfit($membership->user, $membership->business, $start, $end);
     }
 
     /** @param array<string, mixed> $data */

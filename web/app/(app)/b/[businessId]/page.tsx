@@ -169,7 +169,7 @@ export default function BusinessDashboardPage() {
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {mySalaryQuery.data.visible ? (
             <div className="rounded-[var(--radius)] border border-[var(--brand)] bg-[var(--brand-deep)] p-5 text-[var(--on-brand-deep)] sm:col-span-2">
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/55">{mySalaryQuery.data.pay_type === "fixed_salary" ? "My salary" : "My commission"}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/55">{mySalaryQuery.data.pay_type === "fixed_salary" ? "My salary" : mySalaryQuery.data.pay_type === "profit_share" ? "My profit payout" : "My commission"}</p>
               <p className="mt-2 text-3xl font-black tracking-[-0.04em]">{money(Math.abs(mySalaryQuery.data.pending), currency)}</p>
               <p className="mt-2 text-xs leading-5 text-[var(--on-brand-deep)]/55">
                 {mySalaryQuery.data.pending < 0 ? "Overpaid — will be deducted from what's owed next" : "Pending"}

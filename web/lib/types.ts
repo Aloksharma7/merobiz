@@ -424,7 +424,7 @@ export type Expense = {
   created_at: string;
 };
 
-export type PayType = "commission" | "fixed_salary";
+export type PayType = "commission" | "fixed_salary" | "profit_share";
 export type Member = {
   id: number;
   business_id: number;

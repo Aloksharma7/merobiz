@@ -61,7 +61,7 @@ export default function TeamMemberDetailPage() {
 
       <div className="flex flex-wrap items-center gap-3">
         <Badge tone={member.active ? "success" : "neutral"}>{member.active ? "Active" : "Inactive"}</Badge>
-        <Badge tone={member.pay_type === "fixed_salary" ? "info" : "neutral"}>{member.pay_type === "fixed_salary" ? "Fixed salary" : "Commission"}</Badge>
+        <Badge tone={member.pay_type === "fixed_salary" ? "info" : "neutral"}>{member.pay_type === "fixed_salary" ? "Fixed salary" : member.pay_type === "profit_share" ? "Profit based" : "Commission"}</Badge>
         {member.phone ? <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink-soft)]"><Phone size={13} />{member.phone}</span> : null}
         {member.email ? <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink-soft)]"><Mail size={13} />{member.email}</span> : null}
         {member.joined_at ? <span className="text-xs text-[var(--ink-soft)]">Joined {prettyDate(member.joined_at)}</span> : null}
