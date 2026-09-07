@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { SalaryEntryType, SalaryPaymentRecord } from "@/lib/types";
 import { humanize, money, prettyDate } from "@/lib/utils";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 export const ENTRY_TYPE_TONE: Record<SalaryEntryType, "neutral" | "info" | "warning" | "success"> = {
   payment: "neutral",
@@ -10,7 +10,7 @@ export const ENTRY_TYPE_TONE: Record<SalaryEntryType, "neutral" | "info" | "warn
   write_off: "success",
 };
 
-export function PayrollHistoryList({ payments, currency, emptyLabel = "No payments recorded yet.", onDelete, deletingId }: { payments: SalaryPaymentRecord[]; currency: string; emptyLabel?: string; onDelete?: (payment: SalaryPaymentRecord) => void; deletingId?: number }) {
+export function PayrollHistoryList({ payments, currency, emptyLabel = "No payments recorded yet.", onEdit, onDelete, deletingId }: { payments: SalaryPaymentRecord[]; currency: string; emptyLabel?: string; onEdit?: (payment: SalaryPaymentRecord) => void; onDelete?: (payment: SalaryPaymentRecord) => void; deletingId?: number }) {
   if (!payments.length) return <p className="text-xs text-[var(--ink-soft)]">{emptyLabel}</p>;
 
   return (
@@ -26,6 +26,17 @@ export function PayrollHistoryList({ payments, currency, emptyLabel = "No paymen
               <p className="font-black">{money(payment.amount, currency)}</p>
               <p className="text-[11px] text-[var(--ink-soft)]">{humanize(payment.method)}{payment.recorded_by ? ` · ${payment.recorded_by}` : ""}</p>
             </div>
+            {onEdit && payment.entry_type !== "write_off" ? (
+              <button
+                type="button"
+                disabled={deletingId === payment.id}
+                onClick={() => onEdit(payment)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--surface-soft)] disabled:opacity-40"
+                aria-label="Edit this payment"
+              >
+                <Pencil size={15} />
+              </button>
+            ) : null}
             {onDelete ? (
               <button
                 type="button"

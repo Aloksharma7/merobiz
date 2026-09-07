@@ -159,6 +159,44 @@ class SalaryService
         $this->audit->record($actor, $business, 'salary.payment_deleted', $payment, $before, null);
     }
 
+    /**
+     * Corrects a payment/advance/loan entry recorded with the wrong amount, date,
+     * or detail — e.g. a typo caught after the fact. Write-offs are excluded: they
+     * were validated at creation against the outstanding loan balance at that
+     * moment (see writeOffLoan()), and editing one after the fact could silently
+     * invalidate that check. Delete and re-settle instead for those.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function updatePayment(Business $business, SalaryPayment $payment, User $actor, array $data): SalaryPayment
+    {
+        if ($payment->entry_type === SalaryEntryType::WriteOff) {
+            throw ValidationException::withMessages([
+                'payment' => 'A settled write-off can\'t be edited — delete it and settle the loan again instead.',
+            ]);
+        }
+
+        if ($business->isDateClosed($payment->payment_date) || $business->isDateClosed($data['payment_date'])) {
+            throw ValidationException::withMessages([
+                'payment_date' => 'This payment belongs to a closed profit period.',
+            ]);
+        }
+
+        $before = $payment->toArray();
+        $payment->update([
+            'payment_date' => $data['payment_date'],
+            'amount' => Decimal::money($data['amount']),
+            'entry_type' => SalaryEntryType::from($data['entry_type'] ?? SalaryEntryType::Payment->value),
+            'method' => $data['method'],
+            'reference' => $data['reference'] ?? null,
+            'notes' => $data['notes'] ?? null,
+        ]);
+
+        $this->audit->record($actor, $business, 'salary.payment_updated', $payment, $before, $payment->fresh()->toArray());
+
+        return $payment;
+    }
+
     private function monthsElapsed(BusinessMembership $membership): int
     {
         if ($membership->pay_type !== PayType::FixedSalary) {

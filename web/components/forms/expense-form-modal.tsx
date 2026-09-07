@@ -12,17 +12,26 @@ import { toast } from "sonner";
 
 const blank = { category: "", vendor: "", expense_date: today(), amount: "", tax_amount: "0", payment_method: "bank_transfer" as PaymentMethod, reference: "", notes: "", already_in_sale_price: false };
 
-export function ExpenseFormModal({ businessId, open, onClose }: { businessId: string | number; open: boolean; onClose: () => void }) {
+export function ExpenseFormModal({ businessId, open, onClose, expense, isInstallment }: { businessId: string | number; open: boolean; onClose: () => void; expense?: Expense | null; isInstallment?: boolean }) {
   const [form, setForm] = useState(blank);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const queryClient = useQueryClient();
 
-  useEffect(() => { if (open) { setForm({ ...blank, expense_date: today() }); setErrors({}); } }, [open]);
+  useEffect(() => {
+    if (open) {
+      setForm(expense ? {
+        category: expense.category, vendor: expense.vendor ?? "", expense_date: expense.expense_date,
+        amount: String(expense.amount), tax_amount: String(expense.tax_amount ?? 0), payment_method: expense.payment_method,
+        reference: expense.reference ?? "", notes: expense.notes ?? "", already_in_sale_price: !expense.affects_profit,
+      } : { ...blank, expense_date: today() });
+      setErrors({});
+    }
+  }, [expense, open]);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const { already_in_sale_price, ...rest } = form;
-      return (await api.post<ApiMessage<{ expense: Expense }>>(`/businesses/${businessId}/expenses`, {
+      const payload = {
         ...rest,
         vendor: form.vendor || null,
         amount: Number(form.amount),
@@ -30,23 +39,27 @@ export function ExpenseFormModal({ businessId, open, onClose }: { businessId: st
         reference: form.reference || null,
         notes: form.notes || null,
         affects_profit: !already_in_sale_price,
-      })).data;
+      };
+      const response = expense
+        ? await api.patch<ApiMessage<{ expense: Expense }>>(`/businesses/${businessId}/expenses/${expense.id}`, payload)
+        : await api.post<ApiMessage<{ expense: Expense }>>(`/businesses/${businessId}/expenses`, payload);
+      return response.data;
     },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["expenses", String(businessId)] }),
         queryClient.invalidateQueries({ queryKey: ["business-dashboard", String(businessId)] }),
       ]);
-      toast.success("Expense recorded");
+      toast.success(expense ? "Expense updated" : "Expense recorded");
       onClose();
     },
-    onError: (error) => { setErrors(fieldErrors(error)); toast.error("Could not record expense", { description: apiError(error) }); },
+    onError: (error) => { setErrors(fieldErrors(error)); toast.error(expense ? "Could not update expense" : "Could not record expense", { description: apiError(error) }); },
   });
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) { setForm((current) => ({ ...current, [key]: value })); }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add expense" description="Record what was spent so profit reflects the real business result." footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="expense-form" loading={mutation.isPending}>Save expense</Button></>} size="lg">
+    <Modal open={open} onClose={onClose} title={expense ? "Edit expense" : "Add expense"} description="Record what was spent so profit reflects the real business result." footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="expense-form" loading={mutation.isPending}>Save expense</Button></>} size="lg">
       <form id="expense-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="grid gap-4 sm:grid-cols-2">
         <FieldShell label="Category" htmlFor="expense-category" error={errors.category?.[0]} required><Input id="expense-category" value={form.category} onChange={(event) => update("category", event.target.value)} autoFocus placeholder="e.g. Cloud services" required /></FieldShell>
         <FieldShell label="Vendor" htmlFor="expense-vendor" error={errors.vendor?.[0]} hint="Optional"><Input id="expense-vendor" value={form.vendor} onChange={(event) => update("vendor", event.target.value)} placeholder="e.g. Amazon Web Services" /></FieldShell>
@@ -56,13 +69,15 @@ export function ExpenseFormModal({ businessId, open, onClose }: { businessId: st
         <FieldShell label="Payment method" htmlFor="expense-method" error={errors.payment_method?.[0]} required><Select id="expense-method" value={form.payment_method} onChange={(event) => update("payment_method", event.target.value as PaymentMethod)}><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="qr">QR payment</option><option value="card">Card</option><option value="wallet">Digital wallet</option><option value="cheque">Cheque</option><option value="other">Other</option></Select></FieldShell>
         <FieldShell label="Reference" htmlFor="expense-reference" error={errors.reference?.[0]} hint="Optional"><Input id="expense-reference" value={form.reference} onChange={(event) => update("reference", event.target.value)} placeholder="Invoice or receipt number" /></FieldShell>
         <FieldShell label="Notes" htmlFor="expense-notes" error={errors.notes?.[0]} className="sm:col-span-2"><Textarea id="expense-notes" value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Any extra detail worth keeping" /></FieldShell>
-        <label className="flex items-start gap-2.5 rounded-2xl border border-[var(--line)] p-4 text-sm font-semibold sm:col-span-2">
-          <input type="checkbox" checked={form.already_in_sale_price} onChange={(event) => update("already_in_sale_price", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
-          <span>
-            <span className="block">This is the cost of buying the goods/service for a sale</span>
-            <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Check this when you're paying for something you already sold — its cost was already subtracted from profit at the time of that sale. This will still reduce your available balance (real cash out), just not your profit a second time. Only up to the real cost recognized from your sales is exempt this way — if you check more than that, the extra still counts against profit, since it isn't actually already priced into anything.</span>
-          </span>
-        </label>
+        {isInstallment ? null : (
+          <label className="flex items-start gap-2.5 rounded-2xl border border-[var(--line)] p-4 text-sm font-semibold sm:col-span-2">
+            <input type="checkbox" checked={form.already_in_sale_price} onChange={(event) => update("already_in_sale_price", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+            <span>
+              <span className="block">This is the cost of buying the goods/service for a sale</span>
+              <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Check this when you're paying for something you already sold — its cost was already subtracted from profit at the time of that sale. This will still reduce your available balance (real cash out), just not your profit a second time. Only up to the real cost recognized from your sales is exempt this way — if you check more than that, the extra still counts against profit, since it isn't actually already priced into anything.</span>
+            </span>
+          </label>
+        )}
       </form>
     </Modal>
   );

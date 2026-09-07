@@ -106,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::get('/expenses', [ExpenseController::class, 'index']);
             Route::get('/expenses/export', [ExpenseController::class, 'export']);
             Route::post('/expenses', [ExpenseController::class, 'store']);
+            Route::patch('/expenses/{expense}', [ExpenseController::class, 'update']);
             Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy']);
             Route::patch('/expenses/{expense}/status', [ExpenseController::class, 'updateStatus']);
 
@@ -116,6 +117,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::patch('/team/{membership}', [TeamController::class, 'update']);
             Route::get('/team/{membership}/salary', [SalaryController::class, 'index']);
             Route::post('/team/{membership}/salary/payments', [SalaryController::class, 'pay']);
+            Route::patch('/team/{membership}/salary/payments/{payment}', [SalaryController::class, 'update'])->withoutScopedBindings();
             Route::delete('/team/{membership}/salary/payments/{payment}', [SalaryController::class, 'destroy'])->withoutScopedBindings();
             Route::post('/team/{membership}/salary/write-off', [SalaryController::class, 'writeOffLoan']);
             Route::get('/my-salary', [SalaryController::class, 'mine']);

@@ -77,6 +77,20 @@ class SalaryController extends Controller
         ], 201);
     }
 
+    public function update(StoreSalaryPaymentRequest $request, Business $business, BusinessMembership $membership, SalaryPayment $payment): JsonResponse
+    {
+        $this->requirePermission($request, 'team.manage');
+        abort_unless($membership->business_id === $business->id, 404);
+        abort_unless($payment->membership_id === $membership->id, 404);
+
+        $this->salary->updatePayment($business, $payment, $request->user(), $request->validated());
+
+        return response()->json([
+            'message' => 'Payment updated.',
+            'summary' => $this->salary->summaryFor($membership->fresh()),
+        ]);
+    }
+
     public function destroy(Request $request, Business $business, BusinessMembership $membership, SalaryPayment $payment): JsonResponse
     {
         $this->requirePermission($request, 'team.manage');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ExpenseStatus;
 use App\Http\Requests\StoreExpenseRequest;
+use App\Http\Requests\UpdateExpenseRequest;
 use App\Http\Requests\UpdateExpenseStatusRequest;
 use App\Http\Resources\ExpenseResource;
 use App\Models\Business;
@@ -107,7 +108,7 @@ class ExpenseController extends Controller
             'status' => ExpenseStatus::Approved,
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
-            'affects_profit' => $data['affects_profit'] ?? true,
+            'affects_profit' => $this->resolveAffectsProfit($business, $data),
         ]);
 
         $this->audit->record($request->user(), $business, 'expense.created', $expense, null, $expense->toArray(), $request);
@@ -116,6 +117,56 @@ class ExpenseController extends Controller
             'message' => 'Expense recorded.',
             'expense' => new ExpenseResource($expense->fresh(['submitter', 'approver'])),
         ], 201);
+    }
+
+    public function update(UpdateExpenseRequest $request, Business $business, Expense $expense): JsonResponse
+    {
+        $membership = $this->membership($request);
+        $canManage = $membership->allows('expenses.manage');
+        // Same window as destroy() — the person who submitted it can fix their own
+        // mistake the same day, same as fixing a typo right after making it.
+        $canEditOwnToday = $membership->allows('expenses.create')
+            && $expense->submitted_by === $request->user()->id
+            && $expense->created_at->isToday();
+        abort_unless($canManage || $canEditOwnToday, 403);
+        $this->assertBusiness($business, $expense);
+        $data = $request->validated();
+
+        if ($business->isDateClosed($expense->expense_date) || $business->isDateClosed($data['expense_date'])) {
+            throw ValidationException::withMessages(['expense_date' => 'This expense belongs to a closed profit period.']);
+        }
+
+        $before = $expense->toArray();
+        $expense->update([
+            ...$data,
+            'tax_amount' => $data['tax_amount'] ?? 0,
+            'affects_profit' => $this->resolveAffectsProfit($business, $data),
+        ]);
+
+        $this->audit->record($request->user(), $business, 'expense.updated', $expense, $before, $expense->fresh()->toArray(), $request);
+
+        return response()->json([
+            'message' => 'Expense updated.',
+            'expense' => new ExpenseResource($expense->fresh(['submitter', 'approver'])),
+        ]);
+    }
+
+    /**
+     * Installment/project businesses never recognize an automatic cost-of-sales
+     * figure (see DashboardService::metrics() — $cost is forced to 0 there), so
+     * the "already priced into a sale" exemption has no real cost to cap against.
+     * Letting it through would silently do nothing useful, so it's rejected here
+     * rather than accepted and quietly ignored.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveAffectsProfit(Business $business, array $data): bool
+    {
+        if ($business->isInstallment()) {
+            return true;
+        }
+
+        return $data['affects_profit'] ?? true;
     }
 
     public function updateStatus(UpdateExpenseStatusRequest $request, Business $business, Expense $expense): JsonResponse

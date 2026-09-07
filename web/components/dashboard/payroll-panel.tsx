@@ -21,22 +21,39 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
   const [settleNotes, setSettleNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [settleErrors, setSettleErrors] = useState<Record<string, string[]>>({});
+  const [editingPayment, setEditingPayment] = useState<SalaryPaymentRecord | null>(null);
   const queryClient = useQueryClient();
 
-  useEffect(() => {
+  function resetForm() {
     setDate(today());
     setAmount(member.salary_pending > 0 ? String(member.salary_pending) : "");
     setEntryType("payment");
     setMethod("bank_transfer");
     setReference("");
     setNotes("");
+    setErrors({});
+    setEditingPayment(null);
+  }
+
+  useEffect(() => {
+    resetForm();
     setSettleAmount("");
     setSettleNotes("");
-    setErrors({});
     setSettleErrors({});
     // Only reset the form when switching to a different member, not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member.id]);
+
+  function startEditing(payment: SalaryPaymentRecord) {
+    setEditingPayment(payment);
+    setDate(payment.payment_date);
+    setAmount(String(payment.amount));
+    setEntryType(payment.entry_type === "write_off" ? "payment" : payment.entry_type);
+    setMethod(payment.method);
+    setReference(payment.reference ?? "");
+    setNotes(payment.notes ?? "");
+    setErrors({});
+  }
 
   const historyQuery = useQuery({
     queryKey: ["salary-history", String(businessId), member.id],
@@ -53,15 +70,18 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
   }
 
   const mutation = useMutation({
-    mutationFn: async () => (await api.post<ApiMessage<{ summary: SalarySummary }>>(`/businesses/${businessId}/team/${member.id}/salary/payments`, { payment_date: date, amount: Number(amount), entry_type: entryType, method, reference: reference || null, notes: notes || null })).data,
+    mutationFn: async () => {
+      const payload = { payment_date: date, amount: Number(amount), entry_type: entryType, method, reference: reference || null, notes: notes || null };
+      return editingPayment
+        ? (await api.patch<ApiMessage<{ summary: SalarySummary }>>(`/businesses/${businessId}/team/${member.id}/salary/payments/${editingPayment.id}`, payload)).data
+        : (await api.post<ApiMessage<{ summary: SalarySummary }>>(`/businesses/${businessId}/team/${member.id}/salary/payments`, payload)).data;
+    },
     onSuccess: async () => {
       await invalidate();
-      toast.success(entryType === "loan" ? "Loan recorded" : entryType === "advance" ? "Advance recorded" : "Payment recorded");
-      setAmount("");
-      setReference("");
-      setNotes("");
+      toast.success(editingPayment ? "Payment updated" : entryType === "loan" ? "Loan recorded" : entryType === "advance" ? "Advance recorded" : "Payment recorded");
+      resetForm();
     },
-    onError: (error) => { setErrors(fieldErrors(error)); toast.error("Could not record payment", { description: apiError(error) }); },
+    onError: (error) => { setErrors(fieldErrors(error)); toast.error(editingPayment ? "Could not update payment" : "Could not record payment", { description: apiError(error) }); },
   });
 
   const settleMutation = useMutation({
@@ -77,7 +97,11 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
 
   const deleteMutation = useMutation({
     mutationFn: async (payment: SalaryPaymentRecord) => (await api.delete<ApiMessage<{ summary: SalarySummary }>>(`/businesses/${businessId}/team/${member.id}/salary/payments/${payment.id}`)).data,
-    onSuccess: async () => { await invalidate(); toast.success("Payment undone"); },
+    onSuccess: async (_data, payment) => {
+      await invalidate();
+      toast.success("Payment undone");
+      if (editingPayment?.id === payment.id) resetForm();
+    },
     onError: (error) => toast.error("Could not undo this payment", { description: apiError(error) }),
   });
 
@@ -100,6 +124,7 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
       </div>
 
       <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4">
+        {editingPayment ? <p className="text-sm font-bold">Editing a recorded payment</p> : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldShell label="Type" htmlFor="salary-entry-type" hint="What kind of payment is this?">
             <Select id="salary-entry-type" value={entryType} onChange={(event) => setEntryType(event.target.value as SalaryEntryType)}>
@@ -114,7 +139,10 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
           <FieldShell label="Reference" htmlFor="salary-payment-reference" error={errors.reference?.[0]}><Input id="salary-payment-reference" value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Transaction reference" /></FieldShell>
         </div>
         <FieldShell label="Notes" htmlFor="salary-payment-notes" error={errors.notes?.[0]}><Textarea id="salary-payment-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Any extra detail worth keeping" /></FieldShell>
-        <Button type="submit" loading={mutation.isPending}>Record</Button>
+        <div className="flex gap-2">
+          <Button type="submit" loading={mutation.isPending}>{editingPayment ? "Update" : "Record"}</Button>
+          {editingPayment ? <Button type="button" variant="ghost" onClick={resetForm}>Cancel</Button> : null}
+        </div>
       </form>
 
       {outstandingLoan > 0 ? (
@@ -131,7 +159,7 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
 
       <div>
         <p className="mb-2 text-sm font-bold">History</p>
-        {historyQuery.isLoading ? <p className="text-xs text-[var(--ink-soft)]">Loading…</p> : <PayrollHistoryList payments={historyQuery.data?.payments ?? []} currency={currency} onDelete={(payment) => deleteMutation.mutate(payment)} deletingId={deleteMutation.isPending ? deleteMutation.variables?.id : undefined} />}
+        {historyQuery.isLoading ? <p className="text-xs text-[var(--ink-soft)]">Loading…</p> : <PayrollHistoryList payments={historyQuery.data?.payments ?? []} currency={currency} onEdit={startEditing} onDelete={(payment) => deleteMutation.mutate(payment)} deletingId={deleteMutation.isPending ? deleteMutation.variables?.id : undefined} />}
       </div>
     </div>
   );
