@@ -200,6 +200,16 @@ class TeamController extends Controller
 
         $role = BusinessRole::from($data['role']);
         abort_unless($role !== BusinessRole::Owner || $actorMembership->full_control, 403, 'Only a full-control owner can assign the owner role.');
+        // An owner already has a dedicated profit mechanism — Ownership % plus "Log
+        // profit taken" — which correctly treats their own money as a distribution,
+        // not a new cost. Paying an owner through payroll's "Profit based" pay type
+        // instead makes the system treat their own withdrawal as if the business had
+        // spent new money on labor, understating true profit for everyone.
+        if ($role === BusinessRole::Owner && ($data['pay_type'] ?? null) === PayType::ProfitShare->value) {
+            throw ValidationException::withMessages([
+                'pay_type' => 'Owners already have a profit share through Ownership — use "Log profit taken" for their own profit instead of Team payroll.',
+            ]);
+        }
         $fullControl = $role === BusinessRole::Owner && $actorMembership->full_control && ($data['full_control'] ?? false);
 
         $membership = DB::transaction(function () use ($request, $business, $data, $role, $fullControl, $wantsProfitShare): BusinessMembership {
@@ -318,6 +328,18 @@ class TeamController extends Controller
 
         if (isset($data['role'])) {
             $data['role'] = BusinessRole::from($data['role']);
+        }
+
+        // An owner already has a dedicated profit mechanism — Ownership % plus "Log
+        // profit taken" — which correctly treats their own money as a distribution,
+        // not a new cost. Paying an owner through payroll's "Profit based" pay type
+        // instead makes the system treat their own withdrawal as if the business had
+        // spent new money on labor, understating true profit for everyone.
+        $effectiveRole = $data['role'] ?? $membership->role;
+        if ($effectiveRole === BusinessRole::Owner && ($data['pay_type'] ?? null) === PayType::ProfitShare->value) {
+            throw ValidationException::withMessages([
+                'pay_type' => 'Owners already have a profit share through Ownership — use "Log profit taken" for their own profit instead of Team payroll.',
+            ]);
         }
 
         // Promoting someone to owner, demoting or deactivating an existing owner, and granting or

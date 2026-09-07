@@ -43,12 +43,12 @@ export function MemberFormModal({ businessId, actorRole, actorFullControl, open,
         <FieldShell label="Email" htmlFor="member-email" error={errors.email?.[0]} required><Input id="member-email" type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="name@example.com" required /></FieldShell>
         <FieldShell label="Phone" htmlFor="member-phone" error={errors.phone?.[0]}><Input id="member-phone" value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="98XXXXXXXX" /></FieldShell>
         <FieldShell label="Temporary password" htmlFor="member-password" error={errors.password?.[0]} hint="For new users: at least 8 characters with letters and numbers"><PasswordInput id="member-password" minLength={8} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder="Letters and numbers" /></FieldShell>
-        <FieldShell label="Role" htmlFor="member-role" error={errors.role?.[0]} required><Select id="member-role" value={form.role} onChange={(event) => update("role", event.target.value as BusinessRole)}>{roles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</Select></FieldShell>
+        <FieldShell label="Role" htmlFor="member-role" error={errors.role?.[0]} required><Select id="member-role" value={form.role} onChange={(event) => { const role = event.target.value as BusinessRole; setForm((current) => ({ ...current, role, pay_type: role === "owner" ? "fixed_salary" : current.pay_type })); }}>{roles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</Select></FieldShell>
         <FieldShell label="Job title" htmlFor="member-title" error={errors.title?.[0]}><Input id="member-title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Sales Executive" /></FieldShell>
-        <FieldShell label="Pay type" htmlFor="member-pay-type" error={errors.pay_type?.[0]}>
+        <FieldShell label="Pay type" htmlFor="member-pay-type" error={errors.pay_type?.[0]} hint={form.role === "owner" ? "Owners use Ownership + \"Log profit taken\" for their own profit instead" : undefined}>
           <Select id="member-pay-type" value={form.pay_type} onChange={(event) => update("pay_type", event.target.value as PayType)}>
             <option value="fixed_salary">Fixed salary</option>
-            {actorFullControl ? <option value="profit_share">Profit based</option> : null}
+            {actorFullControl && form.role !== "owner" ? <option value="profit_share">Profit based</option> : null}
           </Select>
         </FieldShell>
         {profitBased ? (

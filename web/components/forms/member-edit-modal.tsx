@@ -29,7 +29,7 @@ export function MemberEditModal({ businessId, actorRole, actorFullControl, actor
         full_control: member.full_control,
         title: member.title ?? "",
         active: member.active,
-        pay_type: member.pay_type === "commission" ? "fixed_salary" : member.pay_type,
+        pay_type: member.pay_type === "commission" || (member.role === "owner" && member.pay_type === "profit_share") ? "fixed_salary" : member.pay_type,
         salary_amount: String(member.salary_amount ?? 0),
         salary_visible_to_staff: member.salary_visible_to_staff ?? false,
         ownership_percent: String(member.ownership_percent ?? 0),
@@ -81,12 +81,12 @@ export function MemberEditModal({ businessId, actorRole, actorFullControl, actor
     <Modal open={open} onClose={onClose} title={`Edit ${member.name}`} description={editingFounder ? "This person created the business, so they always keep full control." : "Update role, title, pay and access for this team member."} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="member-edit-form" loading={mutation.isPending}>Save changes</Button></>} size="lg">
       <form id="member-edit-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
         {lockedByFounderProtection ? <p className="rounded-2xl bg-[var(--surface-soft)] p-3 text-xs leading-5 text-[var(--ink-soft)] sm:col-span-2">Only {member.name} can change their own role, active status or full control.</p> : null}
-        <FieldShell label="Role" htmlFor="edit-member-role" error={errors.role?.[0]} required><Select id="edit-member-role" value={form.role} disabled={lockedByFounderProtection} onChange={(event) => update("role", event.target.value as BusinessRole)}>{roles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</Select></FieldShell>
+        <FieldShell label="Role" htmlFor="edit-member-role" error={errors.role?.[0]} required><Select id="edit-member-role" value={form.role} disabled={lockedByFounderProtection} onChange={(event) => { const role = event.target.value as BusinessRole; setForm((current) => ({ ...current, role, pay_type: role === "owner" ? "fixed_salary" : current.pay_type })); }}>{roles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</Select></FieldShell>
         <FieldShell label="Job title" htmlFor="edit-member-title" error={errors.title?.[0]}><Input id="edit-member-title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Sales Executive" /></FieldShell>
-        <FieldShell label="Pay type" htmlFor="edit-member-pay-type" error={errors.pay_type?.[0]}>
+        <FieldShell label="Pay type" htmlFor="edit-member-pay-type" error={errors.pay_type?.[0]} hint={form.role === "owner" ? "Owners use Ownership + \"Log profit taken\" for their own profit instead" : undefined}>
           <Select id="edit-member-pay-type" value={form.pay_type} onChange={(event) => update("pay_type", event.target.value as PayType)}>
             <option value="fixed_salary">Fixed salary</option>
-            {actorFullControl ? <option value="profit_share">Profit based</option> : null}
+            {actorFullControl && form.role !== "owner" ? <option value="profit_share">Profit based</option> : null}
           </Select>
         </FieldShell>
         {profitBased ? (
