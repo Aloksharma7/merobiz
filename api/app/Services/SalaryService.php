@@ -139,6 +139,26 @@ class SalaryService
         });
     }
 
+    /**
+     * Undoes an accidentally recorded payment, advance, loan, or write-off — e.g.
+     * an owner mistakenly paid through Team payroll instead of "Log profit taken".
+     * No amount validation here (unlike pay()/writeOffLoan()): deleting a payment
+     * can only ever move pending back up or an outstanding loan back down, never
+     * create an invalid state.
+     */
+    public function deletePayment(Business $business, SalaryPayment $payment, User $actor): void
+    {
+        if ($business->isDateClosed($payment->payment_date)) {
+            throw ValidationException::withMessages([
+                'payment' => 'This payment belongs to a closed profit period.',
+            ]);
+        }
+
+        $before = $payment->toArray();
+        $payment->delete();
+        $this->audit->record($actor, $business, 'salary.payment_deleted', $payment, $before, null);
+    }
+
     private function monthsElapsed(BusinessMembership $membership): int
     {
         if ($membership->pay_type !== PayType::FixedSalary) {

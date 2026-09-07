@@ -6,6 +6,7 @@ use App\Http\Requests\StoreSalaryPaymentRequest;
 use App\Http\Requests\WriteOffLoanRequest;
 use App\Models\Business;
 use App\Models\BusinessMembership;
+use App\Models\SalaryPayment;
 use App\Services\SalaryService;
 use App\Support\AuthorizesBusinessActions;
 use Illuminate\Http\JsonResponse;
@@ -74,6 +75,20 @@ class SalaryController extends Controller
             'message' => 'Loan settled.',
             'summary' => $this->salary->summaryFor($membership->fresh()),
         ], 201);
+    }
+
+    public function destroy(Request $request, Business $business, BusinessMembership $membership, SalaryPayment $payment): JsonResponse
+    {
+        $this->requirePermission($request, 'team.manage');
+        abort_unless($membership->business_id === $business->id, 404);
+        abort_unless($payment->membership_id === $membership->id, 404);
+
+        $this->salary->deletePayment($business, $payment, $request->user());
+
+        return response()->json([
+            'message' => 'Payment deleted.',
+            'summary' => $this->salary->summaryFor($membership->fresh()),
+        ]);
     }
 
     public function mine(Request $request, Business $business): JsonResponse

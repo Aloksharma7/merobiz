@@ -17,8 +17,8 @@ use App\Http\Controllers\PersonalOverviewController;
 use App\Http\Controllers\PortfolioDashboardController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfitDistributionController;
-use App\Http\Controllers\ProfitWithdrawalController;
 use App\Http\Controllers\ProfitPeriodController;
+use App\Http\Controllers\ProfitWithdrawalController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectProfitApprovalController;
 use App\Http\Controllers\ProjectRefundController;
@@ -116,6 +116,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::patch('/team/{membership}', [TeamController::class, 'update']);
             Route::get('/team/{membership}/salary', [SalaryController::class, 'index']);
             Route::post('/team/{membership}/salary/payments', [SalaryController::class, 'pay']);
+            Route::delete('/team/{membership}/salary/payments/{payment}', [SalaryController::class, 'destroy'])->withoutScopedBindings();
             Route::post('/team/{membership}/salary/write-off', [SalaryController::class, 'writeOffLoan']);
             Route::get('/my-salary', [SalaryController::class, 'mine']);
 

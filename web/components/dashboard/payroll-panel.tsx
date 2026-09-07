@@ -75,6 +75,12 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
     onError: (error) => { setSettleErrors(fieldErrors(error)); toast.error("Could not settle loan", { description: apiError(error) }); },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (payment: SalaryPaymentRecord) => (await api.delete<ApiMessage<{ summary: SalarySummary }>>(`/businesses/${businessId}/team/${member.id}/salary/payments/${payment.id}`)).data,
+    onSuccess: async () => { await invalidate(); toast.success("Payment undone"); },
+    onError: (error) => toast.error("Could not undo this payment", { description: apiError(error) }),
+  });
+
   const pending = summary?.pending ?? member.salary_pending;
   const outstandingLoan = summary?.outstanding_loan ?? member.outstanding_loan;
 
@@ -125,7 +131,7 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
 
       <div>
         <p className="mb-2 text-sm font-bold">History</p>
-        {historyQuery.isLoading ? <p className="text-xs text-[var(--ink-soft)]">Loading…</p> : <PayrollHistoryList payments={historyQuery.data?.payments ?? []} currency={currency} />}
+        {historyQuery.isLoading ? <p className="text-xs text-[var(--ink-soft)]">Loading…</p> : <PayrollHistoryList payments={historyQuery.data?.payments ?? []} currency={currency} onDelete={(payment) => deleteMutation.mutate(payment)} deletingId={deleteMutation.isPending ? deleteMutation.variables?.id : undefined} />}
       </div>
     </div>
   );
