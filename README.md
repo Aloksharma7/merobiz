@@ -67,45 +67,9 @@ The frontend uses a custom component and visual system rather than a stock UI-li
 - Brick Math for precise decimal calculations
 - PHPUnit feature-test structure
 
-### Local infrastructure
-
-- Docker Compose
-- MySQL 8.4
-- Production-style multi-stage Docker builds
-
 ---
 
-# Fastest start: Docker Compose
-
-## Requirements
-
-- Docker Desktop or Docker Engine with Docker Compose
-- Free ports `3000`, `8000`, and `3307`
-
-## Start the application
-
-From the project root:
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-Open:
-
-- Web application: `http://localhost:3000`
-- API status: `http://localhost:8000`
-- API health: `http://localhost:8000/up`
-- MySQL forwarded port: `3307`
-
-The API container automatically:
-
-1. waits for MySQL;
-2. runs migrations;
-3. loads demo records when `SEED_DEMO=true`;
-4. starts Laravel on port `8000`.
-
-The local session cookie is intentionally host-only. Leave `SESSION_DOMAIN` empty for `localhost`.
+# Local development
 
 ## Demo sign-ins
 
@@ -125,25 +89,6 @@ The seeded owner has:
 - 100% of **Enlighten Research**
 
 The demo includes six months of invoices, partial payments, commissions, approved expenses, a closed previous month, owner allocations, and partial distributions.
-
-## Stop or reset
-
-Stop containers:
-
-```bash
-docker compose down
-```
-
-Delete the demo database and start fresh:
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
----
-
-# Manual local development
 
 ## 1. Database
 
@@ -292,7 +237,6 @@ merobiz-os/
 │   ├── lib/                     API, authentication, contexts, types, utilities
 │   └── public/
 ├── docs/
-├── docker-compose.yml
 └── README.md
 ```
 
@@ -300,7 +244,7 @@ merobiz-os/
 
 # Environment reference
 
-## Root/Docker variables
+## Environment variables
 
 | Variable | Local default | Purpose |
 |---|---|---|
@@ -308,8 +252,6 @@ merobiz-os/
 | `DB_DATABASE` | `merobiz` | MySQL database |
 | `DB_USERNAME` | `merobiz` | MySQL application user |
 | `DB_PASSWORD` | `merobiz` | MySQL application password |
-| `DB_ROOT_PASSWORD` | `rootsecret` | MySQL root password |
-| `DB_PORT_FORWARD` | `3307` | Host MySQL port |
 | `API_ORIGIN` | `http://localhost:8000` | Laravel public origin |
 | `FRONTEND_ORIGIN` | `http://localhost:3000` | Allowed frontend origin |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api` | Browser API base URL |
@@ -452,14 +394,6 @@ cd web
 npm run typecheck
 npm run lint
 npm run build
-```
-
-## Docker
-
-```bash
-docker compose config
-docker compose up --build
-docker compose logs -f api web
 ```
 
 ---

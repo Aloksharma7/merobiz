@@ -1,6 +1,6 @@
 # API reference
 
-Base URL in local Docker development:
+Base URL in local development:
 
 ```text
 http://localhost:8000/api

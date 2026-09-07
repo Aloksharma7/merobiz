@@ -9,8 +9,6 @@ The following checks were run in the build environment after the final source ed
 - PHP syntax lint over all 115 API PHP files
 - TypeScript compiler parse pass over all 50 TypeScript/TSX implementation files (plus the generated `next-env.d.ts`) using the locally available compiler mode that does not require installed project packages
 - JSON parsing for project manifests
-- YAML parsing for Docker Compose
-- shell syntax check for the API entrypoint
 - scan for unresolved merge markers
 - scan for accidental generated dependency directories
 - hook-order heuristic to catch React hooks declared after changing early returns
@@ -49,10 +47,18 @@ npm run lint
 npm run build
 ```
 
-Then run the full stack:
+Then run the full stack — API in one terminal:
 
 ```bash
-docker compose up --build
+cd api
+php artisan serve --host=0.0.0.0 --port=8000
+```
+
+frontend in a second terminal:
+
+```bash
+cd web
+npm run dev
 ```
 
 Verify in a browser:

@@ -5,9 +5,9 @@
 Use separate hosts under one parent domain:
 
 ```text
-app.example.com → Next.js container/service
-api.example.com → Laravel container/service
-mysql/private    → managed MySQL or private container
+app.example.com → Next.js app
+api.example.com → Laravel app
+mysql/private    → managed MySQL, kept off the public internet
 ```
 
 Keep MySQL off the public internet. Route browser traffic only to the frontend and API.
@@ -56,15 +56,11 @@ For unrelated top-level domains, cookie and browser policies become more complex
 
 ## 3. Build
 
-```bash
-docker compose build --pull
-```
-
-The Next.js public API variables are build-time values because they are exposed to browser JavaScript. Rebuild the web image when these values change.
+The Next.js public API variables are build-time values because they are exposed to browser JavaScript. Rebuild the frontend whenever these values change — see `.github/workflows/deploy-frontend.yml`, which builds `npm run build` on every push and uploads only the finished output; no build step runs on the production server itself.
 
 ## 4. Migrate
 
-The supplied API container runs migrations on startup. In stricter environments, remove automatic migration from the entrypoint and run it as an explicit release job:
+`.github/workflows/deploy-backend.yml` runs migrations as part of every backend deploy:
 
 ```bash
 php artisan migrate --force
@@ -108,7 +104,7 @@ At minimum monitor:
 - Laravel exceptions;
 - failed authentication and authorization spikes;
 - database health;
-- container restarts;
+- app process restarts;
 - migration failures;
 - disk/storage usage;
 - slow API endpoints;
@@ -132,9 +128,14 @@ Before real financial use:
 - establish an incident-response and access-revocation process;
 - keep audit logs and backups under separate access controls.
 
-## 9. CI pipeline
+## 9. CI/CD pipeline
 
-A useful CI sequence is:
+Deployment runs automatically through two GitHub Actions workflows, triggered on push to `main`:
+
+- `.github/workflows/deploy-backend.yml` — SSHs into the server, pulls the latest code, runs `composer install`, `php artisan migrate --force`, and refreshes the config/route cache.
+- `.github/workflows/deploy-frontend.yml` — builds the Next.js app on GitHub's runners (`npm ci`, `npm run build`), assembles the standalone production bundle, and uploads only that finished output to the server. No `npm`/`node`/build command ever runs on the production server itself; it only receives files.
+
+A useful pre-deploy check sequence, run either locally or as a separate CI job before merging to `main`:
 
 ```text
 API:
@@ -147,11 +148,6 @@ Web:
   npm run typecheck
   npm run lint
   npm run build
-
-Container:
-  docker compose config
-  docker build api
-  docker build web
 ```
 
 Use lock files after installing dependencies in your development environment and commit them before production deployment.
@@ -172,7 +168,7 @@ The supplied print invoice is a configurable operational document, not evidence 
 
 ## 11. Scaling notes
 
-The current stateless API/web containers can be replicated once sessions/cache/queues are moved to shared infrastructure such as Redis or database-backed stores suitable for the traffic level.
+The current stateless API/web processes can be replicated once sessions/cache/queues are moved to shared infrastructure such as Redis or database-backed stores suitable for the traffic level.
 
 Before horizontal scaling:
 

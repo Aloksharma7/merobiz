@@ -1,9 +1,0 @@
-.git
-.env
-vendor
-storage/logs/*
-storage/framework/cache/*
-storage/framework/sessions/*
-storage/framework/views/*
-.phpunit.cache
-coverage
