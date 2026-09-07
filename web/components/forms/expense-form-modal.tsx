@@ -59,8 +59,8 @@ export function ExpenseFormModal({ businessId, open, onClose }: { businessId: st
         <label className="flex items-start gap-2.5 rounded-2xl border border-[var(--line)] p-4 text-sm font-semibold sm:col-span-2">
           <input type="checkbox" checked={form.already_in_sale_price} onChange={(event) => update("already_in_sale_price", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
           <span>
-            <span className="block">This cost is already priced into a sale</span>
-            <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Check this if you already set a cost on the invoice item for this (so profit already accounts for it). It'll still reduce your available balance, just not profit a second time.</span>
+            <span className="block">This is the cost of buying the goods/service for a sale</span>
+            <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Check this when you're paying for something you already sold — its cost was already subtracted from profit at the time of that sale. This will still reduce your available balance (real cash out), just not your profit a second time.</span>
           </span>
         </label>
       </form>
