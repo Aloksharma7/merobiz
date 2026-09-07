@@ -10,6 +10,7 @@ use App\Models\Business;
 use App\Models\User;
 use App\Services\DashboardService;
 use App\Services\InvoiceService;
+use App\Services\PaymentService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -69,6 +70,10 @@ class ProfitCalculationTest extends TestCase
             ]],
         ]);
         // Employee sales affect business profit immediately; there is no approval step.
+        // Profit only counts once collected, so pay this invoice in full.
+        app(PaymentService::class)->record($business, $invoice, $seller, [
+            'payment_date' => today()->toDateString(), 'amount' => 1000, 'method' => PaymentMethod::BankTransfer->value,
+        ]);
 
         $business->expenses()->create([
             'submitted_by' => $owner->id,

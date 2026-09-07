@@ -290,6 +290,16 @@ class DashboardService
         // One aggregate query instead of eight separate SUM/COUNT round trips —
         // this runs up to a dozen times per dashboard load (current period, prior
         // period, month-to-date, and once per point on the 6-month trend chart).
+        //
+        // recognized_net_sales / recognized_cost scale each invoice's sales and
+        // cost by how much of it has actually been collected (paid_amount /
+        // total_amount) — a sale sitting at 60% paid only recognizes 60% of its
+        // sales and 60% of its cost toward profit. Profit is only ever "real"
+        // once the cash backing it has actually come in; once fully paid, an
+        // invoice recognizes its full amount, same as before. This is deliberately
+        // separate from net_sales/cost_of_sales below, which stay full accrual
+        // figures (how much was sold), so "Net sales" doesn't start meaning
+        // something different from what it's always meant.
         $aggregate = (clone $invoices)->selectRaw(
             'COALESCE(SUM(subtotal), 0) as subtotal, '.
             'COALESCE(SUM(discount_amount), 0) as discount_amount, '.
@@ -298,6 +308,8 @@ class DashboardService
             'COALESCE(SUM(cost_amount), 0) as cost_amount, '.
             'COALESCE(SUM(commission_amount), 0) as commission_amount, '.
             'COALESCE(SUM(balance_amount), 0) as balance_amount, '.
+            'COALESCE(SUM(CASE WHEN total_amount > 0 THEN (subtotal - discount_amount) * (total_amount - balance_amount) / total_amount ELSE 0 END), 0) as recognized_net_sales, '.
+            'COALESCE(SUM(CASE WHEN total_amount > 0 THEN cost_amount * (total_amount - balance_amount) / total_amount ELSE 0 END), 0) as recognized_cost, '.
             'COUNT(*) as invoice_count'
         )->first();
 
@@ -308,6 +320,8 @@ class DashboardService
         // Installment/project businesses don't recognize invoice cost and margin
         // automatically — profit only counts once approved on the project.
         $cost = $isInstallment ? 0.0 : (float) $aggregate->cost_amount;
+        $recognizedNetSales = $isInstallment ? 0.0 : (float) $aggregate->recognized_net_sales;
+        $recognizedCost = $isInstallment ? 0.0 : (float) $aggregate->recognized_cost;
         $commissions = $isInstallment ? 0.0 : (float) $aggregate->commission_amount;
         $receivables = (float) $aggregate->balance_amount;
         $invoiceCount = (float) $aggregate->invoice_count;
@@ -352,7 +366,10 @@ class DashboardService
         $cashCollected = (float) $payments->sum('amount') - $refunds;
 
         $netSales = $subtotal - $discounts;
-        $grossProfit = $isInstallment ? 0.0 : ($netSales - $cost);
+        // Gross profit deliberately uses the recognized (collection-scaled) sales
+        // and cost above, not $netSales/$cost — profit only counts the portion of
+        // each sale that's actually been paid for so far.
+        $grossProfit = $isInstallment ? 0.0 : ($recognizedNetSales - $recognizedCost);
         $netProfit = $grossProfit - $expenses - $payrollCost - $writerCost - $refunds + $projectProfit;
 
         return [

@@ -29,8 +29,12 @@ export function FieldShell({ label, htmlFor, hint, error, required, className, c
 
 const fieldClasses = "h-11 w-full rounded-xl border border-[var(--line-strong)] bg-white px-3.5 text-sm text-[var(--ink)] shadow-[0_1px_2px_rgb(16_32_25/0.02)] placeholder:text-[#8b9690] transition-[border-color,box-shadow,background-color] duration-150 ease-out hover:border-[#aab7ad] focus:border-[var(--brand)] focus:outline-none focus:ring-3 focus:ring-[var(--brand-soft)] disabled:bg-[#f0f2ef] disabled:text-[#77827c]";
 
-export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...props }, ref) {
-  return <input ref={ref} className={cn(fieldClasses, className)} {...props} />;
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, onWheel, type, ...props }, ref) {
+  // Number inputs otherwise change value when the page is scrolled while the
+  // field has focus (default browser behavior) — silently turning, say, 3000
+  // into 2999. Blur it on wheel instead so scrolling just scrolls the page.
+  const handleWheel = type === "number" ? (event: React.WheelEvent<HTMLInputElement>) => { event.currentTarget.blur(); onWheel?.(event); } : onWheel;
+  return <input ref={ref} type={type} className={cn(fieldClasses, className)} onWheel={handleWheel} {...props} />;
 });
 
 export const PasswordInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function PasswordInput({ className, ...props }, ref) {

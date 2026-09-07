@@ -7,6 +7,7 @@ use App\Models\Business;
 use App\Models\User;
 use App\Services\InvoiceService;
 use App\Services\OwnershipService;
+use App\Services\PaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -32,9 +33,13 @@ class ProfitBasedPaySummaryTest extends TestCase
             'name' => 'Service', 'type' => 'service', 'unit' => 'session', 'sale_price' => 2000, 'cost_price' => 750, 'tax_rate' => 0, 'active' => true,
         ]);
 
-        app(InvoiceService::class)->create($business, $owner, [
+        $invoice = app(InvoiceService::class)->create($business, $owner, [
             'customer_name' => 'Walk-in', 'invoice_date' => today()->toDateString(), 'status' => 'issued', 'discount_amount' => 0,
             'items' => [['product_id' => $product->id, 'description' => 'Service', 'quantity' => 1, 'unit_price' => 2000, 'discount_amount' => 0, 'tax_rate' => 0]],
+        ]);
+        // Profit only counts once collected, so pay this invoice in full.
+        app(PaymentService::class)->record($business, $invoice, $owner, [
+            'payment_date' => today()->toDateString(), 'amount' => 2000, 'method' => 'bank_transfer',
         ]);
         // net_profit = 2000 - 750 = 1250. Employee's profit share is 20% = 250.
         app(OwnershipService::class)->schedule($business, $employee->id, 0, 20, today()->toImmutable()->startOfDay(), null, $owner);
