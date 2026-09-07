@@ -509,6 +509,14 @@ export type ProfitPeriod = {
   allocations: ProfitAllocation[];
 };
 
+export type ProfitWithdrawalRecord = {
+  id: number;
+  withdrawn_on: string;
+  amount: number;
+  notes?: string | null;
+  user_name?: string | null;
+};
+
 export type ProfitDistribution = {
   id: number;
   profit_allocation_id: number;

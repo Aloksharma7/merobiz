@@ -65,7 +65,6 @@ export default function PortfolioPage() {
           onLogProfit={ownerMode && ownedBusinesses.length ? () => setWithdrawalOpen(true) : undefined}
         />
         <MetricCard emphasis={!ownerMode} label={ownerMode ? "This month's expected profit" : "This month's expected net profit"} value={data.month_to_date.profit} currency={currency} icon={CalendarClock} hint="Month to date" />
-        <MetricCard label="Available balance" value={data.total_available_balance ?? 0} currency={currency} icon={Landmark} hint="Across all your businesses, right now — not tied to the date filter below" />
         {ownerMode ? (
           <MetricCard
             emphasis
@@ -114,7 +113,7 @@ export default function PortfolioPage() {
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Portfolio summary">
             {ownerMode ? <MetricCard emphasis label="Your expected profit" value={data.summary.attributable_profit ?? 0} currency={currency} icon={CircleDollarSign} hint="Based on your ownership share, not yet taken out" /> : <MetricCard emphasis label="Business expected profit" value={data.summary.net_profit} currency={currency} icon={CircleDollarSign} hint="Sales after costs, expenses and commissions" />}
             <MetricCard label="Combined net sales" value={data.summary.net_sales} currency={currency} icon={TrendingUp} hint={`${data.summary.invoice_count} invoices`} />
-            <MetricCard label="Cash collected" value={data.summary.cash_collected} currency={currency} icon={Landmark} hint="Payments received in this period" />
+            <MetricCard label="Available balance" value={data.total_available_balance ?? 0} currency={currency} icon={Landmark} hint="Across all your businesses, right now — not tied to the date range above" />
             <MetricCard label="Customer receivables" value={data.summary.receivables} currency={currency} icon={HandCoins} hint="Balance on open invoices" />
           </section>
 
@@ -122,7 +121,7 @@ export default function PortfolioPage() {
             <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-4">
               {[
                 ["Expected business net profit", data.summary.net_profit, "After costs, expenses and commissions, not yet withdrawn"],
-                ["Operating expenses", data.summary.expenses, "Approved expenses in this period"],
+                ["Approved expenses", data.summary.expenses, "Business costs in this period"],
                 ["Profit received", data.summary.distributed_profit ?? 0, "Partner distributions paid to you"],
                 ["Profit still payable", data.summary.outstanding_profit ?? 0, "Closed allocations not yet distributed"],
               ].map(([label, value, note]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(Number(value), currency)}</p><p className="mt-1 text-[11px] leading-4 text-[var(--ink-soft)]">{String(note)}</p></div>)}

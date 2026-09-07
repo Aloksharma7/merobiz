@@ -37,6 +37,7 @@ export function ProfitWithdrawalFormModal({ open, onClose, businesses }: { open:
         queryClient.invalidateQueries({ queryKey: ["business-dashboard", businessId] }),
         queryClient.invalidateQueries({ queryKey: ["portfolio-dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["personal-overview"] }),
+        queryClient.invalidateQueries({ queryKey: ["profit-withdrawals", businessId] }),
       ]);
       toast.success("Profit withdrawal recorded");
       onClose();

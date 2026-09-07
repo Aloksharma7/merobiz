@@ -1,0 +1,60 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build production bundle
+        working-directory: web
+        run: npm run build
+
+      - name: Assemble serverupload
+        working-directory: web
+        run: |
+          rm -rf serverupload/.next serverupload/public
+          cp -r .next/standalone/. serverupload/
+          mkdir -p serverupload/.next/static
+          cp -r .next/static/. serverupload/.next/static/
+          cp -r public serverupload/public
+          cp .env.production serverupload/.env
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      # Only ever touches .next/, node_modules/, public/, server.js, package.json, .env.
+      # Never touches .htaccess, cgi-bin, .well-known, stderr.log, tmp, or anything else
+      # already sitting in that folder.
+      - name: Upload only the files this app owns
+        working-directory: web/serverupload
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          REMOTE="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:business.techchamp.com.np"
+          RSYNC_SSH="ssh -p ${{ secrets.SSH_PORT }}"
+          rsync -avz --delete -e "$RSYNC_SSH" .next/ "$REMOTE/.next/"
+          rsync -avz --delete -e "$RSYNC_SSH" node_modules/ "$REMOTE/node_modules/"
+          rsync -avz --delete -e "$RSYNC_SSH" public/ "$REMOTE/public/"
+          rsync -avz -e "$RSYNC_SSH" server.js package.json .env "$REMOTE/"
+
+      - name: Tell Passenger to restart the app (no node/npm command runs)
+        run: |
+          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "touch ~/business.techchamp.com.np/tmp/restart.txt"

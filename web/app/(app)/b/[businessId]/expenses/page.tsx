@@ -13,11 +13,11 @@ import { PageHeader } from "@/components/ui/page-header";
 import { api, apiError, downloadFile } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useBusinesses } from "@/lib/business-context";
-import type { ApiMessage, Expense, ExpenseStatus, Paginated } from "@/lib/types";
+import type { ApiMessage, Expense, ExpenseStatus, Paginated, ProfitWithdrawalRecord } from "@/lib/types";
 import { humanize, money, prettyDate } from "@/lib/utils";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isToday, parseISO } from "date-fns";
-import { Check, Clock3, Download, Plus, Receipt, Search, Trash2, WalletCards, X } from "lucide-react";
+import { Banknote, Check, Clock3, Download, Plus, Receipt, Search, Trash2, WalletCards, X } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -38,6 +38,7 @@ function ExpensesPageContent() {
   const business = getBusiness(businessId);
   const canManage = can(business, "expenses.manage");
   const canCreate = canManage || can(business, "expenses.create");
+  const canViewFinancials = can(business, "dashboard.financial");
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -62,6 +63,11 @@ function ExpensesPageContent() {
     queryKey: ["expenses", businessId, { search, status, page }],
     queryFn: async () => (await api.get<Paginated<Expense>>(`/businesses/${businessId}/expenses`, { params: { search: search || undefined, status, page, per_page: 20 } })).data,
     placeholderData: keepPreviousData,
+  });
+  const withdrawalsQuery = useQuery({
+    queryKey: ["profit-withdrawals", businessId],
+    queryFn: async () => (await api.get<{ data: ProfitWithdrawalRecord[] }>(`/businesses/${businessId}/profit-withdrawals`)).data.data,
+    enabled: canViewFinancials,
   });
 
   const statusMutation = useMutation({
@@ -107,6 +113,14 @@ function ExpensesPageContent() {
           </>
         ) : <EmptyState icon={WalletCards} title={search || status !== "all" ? "No matching expenses" : "No expenses recorded"} description={search || status !== "all" ? "Change the filters to see other expense records." : "Record operating costs so the profit dashboard reflects the real business result."} action={canCreate ? <Button leftIcon={<Plus size={16} />} onClick={() => setOpen(true)}>Add expense</Button> : undefined} />}
       </Card>
+      {canViewFinancials ? (
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-[var(--line)] p-4"><Banknote size={16} className="text-[var(--brand)]" /><h2 className="font-extrabold">Profit taken out</h2><p className="ml-1 text-xs text-[var(--ink-soft)]">Money an owner has withdrawn — real cash out, separate from business expenses.</p></div>
+          {withdrawalsQuery.isLoading ? <TableLoading /> : withdrawalsQuery.data?.length ? (
+            <div className="divide-y divide-[var(--line)]">{withdrawalsQuery.data.map((withdrawal) => <div key={withdrawal.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm font-bold">{prettyDate(withdrawal.withdrawn_on)}{withdrawal.user_name ? ` · ${withdrawal.user_name}` : ""}</p>{withdrawal.notes ? <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{withdrawal.notes}</p> : null}</div><p className="shrink-0 font-black">{money(withdrawal.amount, business.currency)}</p></div>)}</div>
+          ) : <EmptyState icon={Banknote} title="Nothing withdrawn yet" description="Profit an owner takes out shows up here, separate from business expenses." />}
+        </Card>
+      ) : null}
       <ExpenseFormModal businessId={businessId} open={canCreate && open} onClose={() => setOpen(false)} />
     </div>
   );

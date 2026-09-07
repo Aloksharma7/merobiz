@@ -127,6 +127,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('/profit-periods', [ProfitPeriodController::class, 'store']);
             Route::get('/profit-distributions', [ProfitDistributionController::class, 'index']);
             Route::post('/profit-distributions', [ProfitDistributionController::class, 'store']);
+            Route::get('/profit-withdrawals', [ProfitWithdrawalController::class, 'index']);
             Route::post('/profit-withdrawals', [ProfitWithdrawalController::class, 'store']);
         });
 });

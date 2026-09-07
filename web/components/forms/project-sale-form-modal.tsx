@@ -91,7 +91,7 @@ export function ProjectSaleFormModal({
         notes: notes || null,
       });
 
-      return invoice;
+      return (await api.get<{ data: Invoice }>(`/businesses/${businessId}/invoices/${invoice.id}`)).data.data;
     },
     onSuccess: async (invoice) => {
       await Promise.all([

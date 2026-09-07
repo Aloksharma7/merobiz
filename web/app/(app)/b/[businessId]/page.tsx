@@ -88,30 +88,17 @@ export default function BusinessDashboardPage() {
       </section>
       <ProfitWithdrawalFormModal open={withdrawalOpen} onClose={() => setWithdrawalOpen(false)} businesses={[{ id: Number(businessId), name: business.name }]} />
 
-      {financial ? (
-        <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-6">
-          <div className="rounded-2xl bg-[var(--brand-deep)] px-4 py-3.5 text-[var(--on-brand-deep)] sm:col-span-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/55">Available balance</p>
-            <p className="mt-1.5 text-2xl font-black tracking-[-0.03em]">{money(balance.available_balance, currency)}</p>
-            <p className="mt-1 text-[11px] leading-4 text-[var(--on-brand-deep)]/52">What the business actually has right now — not tied to the date filter below.</p>
-          </div>
-          {[
-            ["Collected (lifetime)", balance.collected],
-            ["Expenses paid", -balance.expenses_paid],
-            ["Payroll paid", -balance.payroll_paid],
-            ...(data.business.is_installment ? [["Writer payments", -balance.writer_paid]] : []),
-            ["Owner withdrawals", -balance.owner_withdrawn],
-          ].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{Number(value) < 0 ? "− " : ""}{money(Math.abs(Number(value)), currency)}</p></div>)}
-        </section>
-      ) : null}
-
       <DateRangeControl value={range} onChange={setRange} />
 
       {layout.show_overview_cards ? (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard emphasis={financial} label={owner ? "Your expected profit" : admin ? "Business expected profit" : "My sales"} value={owner ? data.summary.attributable_profit ?? 0 : admin ? data.summary.net_profit : data.summary.net_sales} currency={currency} icon={CircleDollarSign} hint={owner ? `${data.business.profit_share_percent}% of profit so far, not yet taken out` : admin ? "Sales after costs and expenses" : "Only invoices created by you"} />
           <MetricCard label={employee ? "My invoices" : "Net sales"} value={employee ? data.summary.invoice_count : data.summary.net_sales} currency={currency} valueFormatter={employee ? (value) => number(value) : undefined} icon={TrendingUp} change={employee ? undefined : data.summary.net_sales_change} hint={employee ? `${money(data.summary.net_sales, currency)} total sales` : `${data.summary.invoice_count} invoices`} />
-          <MetricCard label={employee ? "My collections" : "Cash collected"} value={data.summary.cash_collected} currency={currency} icon={Landmark} hint={employee ? "Payments collected against your invoices" : "Payments received during this period"} />
+          {employee ? (
+            <MetricCard label="My collections" value={data.summary.cash_collected} currency={currency} icon={Landmark} hint="Payments collected against your invoices" />
+          ) : (
+            <MetricCard label="Available balance" value={balance.available_balance} currency={currency} icon={Landmark} hint="What the business has right now — not tied to the date range below" />
+          )}
           <MetricCard label={employee ? "My outstanding" : "Receivables"} value={data.summary.receivables} currency={currency} icon={HandCoins} hint={employee ? "Unpaid balance on your invoices" : "Balance on invoices dated in this range"} />
         </section>
       ) : null}
@@ -125,7 +112,7 @@ export default function BusinessDashboardPage() {
             ...(data.business.is_installment ? [["Writer payments", data.summary.writer_cost, "Paid to writers for delivered work"]] : []),
             ["Expected net profit", data.summary.net_profit, "Before owner distribution, not yet withdrawn"],
           ] as Array<[string, number, string]>).map(([label, value, note]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(Number(value), currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">{String(note)}</p></div>)}
-          <div className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5 sm:col-span-2 xl:col-span-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Commission earned so far (estimated)</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(data.summary.commissions, currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">What commission-based staff are estimated to be owed from their sales so far — this only reduces profit once actually paid out from their Payroll page, alongside everyone else's payments.</p></div>
+          {data.summary.commissions > 0 ? <div className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5 sm:col-span-2 xl:col-span-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Commission earned so far (estimated)</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(data.summary.commissions, currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">What commission-based staff are estimated to be owed from their sales so far — this only reduces profit once actually paid out from their Payroll page, alongside everyone else's payments.</p></div> : null}
         </section>
       ) : null}
 
