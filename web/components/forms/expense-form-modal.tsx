@@ -60,7 +60,7 @@ export function ExpenseFormModal({ businessId, open, onClose }: { businessId: st
           <input type="checkbox" checked={form.already_in_sale_price} onChange={(event) => update("already_in_sale_price", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
           <span>
             <span className="block">This is the cost of buying the goods/service for a sale</span>
-            <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Check this when you're paying for something you already sold — its cost was already subtracted from profit at the time of that sale. This will still reduce your available balance (real cash out), just not your profit a second time.</span>
+            <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Check this when you're paying for something you already sold — its cost was already subtracted from profit at the time of that sale. This will still reduce your available balance (real cash out), just not your profit a second time. Only up to the real cost recognized from your sales is exempt this way — if you check more than that, the extra still counts against profit, since it isn't actually already priced into anything.</span>
           </span>
         </label>
       </form>

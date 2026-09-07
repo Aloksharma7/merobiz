@@ -322,12 +322,23 @@ class DashboardService
         // affects_profit=false means this expense is cash catching up to a cost
         // already recognized as COGS on an invoice item — it still reduces available
         // balance (see availableBalance() below, which does not filter on this flag)
-        // but must not deduct from profit a second time here.
-        $expenses = $creator ? 0.0 : (float) $business->expenses()
+        // but must not deduct from profit a second time here. That exemption is
+        // capped at $cost (the real COGS recognized across every sale in this same
+        // period, combined) — someone can mark more expenses "already priced in"
+        // than that, but only up to $cost is genuinely already accounted for; any
+        // amount claimed beyond it isn't actually priced into any sale, so it falls
+        // back to reducing profit like a normal expense.
+        // One query for both sums (not two) — metrics() runs up to ten times per
+        // dashboard load, so an extra round trip here adds up fast.
+        $expenseTotals = $creator ? null : $business->expenses()
             ->where('status', 'approved')
-            ->where('affects_profit', true)
             ->whereBetween('expense_date', [$start->toDateString(), $end->toDateString()])
-            ->sum('amount');
+            ->selectRaw('COALESCE(SUM(CASE WHEN affects_profit THEN amount ELSE 0 END), 0) as normal_total, '.
+                'COALESCE(SUM(CASE WHEN affects_profit THEN 0 ELSE amount END), 0) as exempt_claimed')
+            ->first();
+        $expenses = $creator ? 0.0 : (float) $expenseTotals->normal_total;
+        $exemptClaimed = $creator ? 0.0 : (float) $expenseTotals->exempt_claimed;
+        $expenses += max(0, $exemptClaimed - $cost);
 
         $projectProfit = $creator ? 0.0 : $this->approvedProjectProfit($business, $start, $end);
         // A refund is money physically handed back for an aborted project — it
