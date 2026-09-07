@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\InvoiceStatus;
-use App\Enums\SaleVerificationStatus;
 use App\Models\Business;
 use App\Models\Invoice;
 use App\Models\PanInvoiceSequence;
@@ -119,11 +118,6 @@ class InvoiceService
                 'balance_amount' => $totals['total_amount'],
                 'notes' => Arr::get($data, 'notes'),
                 'finalized_at' => $status === InvoiceStatus::Issued ? now() : null,
-                // Legacy verification columns are kept for database compatibility, but
-                // every sale is accepted immediately. There is no approval workflow.
-                'verification_status' => SaleVerificationStatus::Verified,
-                'verified_by' => $creator->id,
-                'verified_at' => now(),
             ]);
 
             foreach ($preparedItems as $index => $item) {

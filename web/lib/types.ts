@@ -501,6 +501,7 @@ export type ProfitPeriod = {
   expenses: number;
   commissions: number;
   payroll_cost: number;
+  writer_cost: number;
   net_profit: number;
   notes?: string | null;
   closed_at?: string | null;
@@ -531,6 +532,7 @@ export type MetricSummary = {
   expenses: number;
   commissions: number;
   payroll_cost: number;
+  writer_cost: number;
   net_profit: number;
   cash_collected: number;
   receivables: number;
@@ -561,6 +563,16 @@ export type SellerRow = {
   invoice_count: number;
 };
 
+export type AvailableBalance = {
+  available_balance: number;
+  collected: number;
+  refunded: number;
+  expenses_paid: number;
+  payroll_paid: number;
+  writer_paid: number;
+  owner_withdrawn: number;
+};
+
 export type PortfolioDashboard = {
   period: { start: string; end: string; label: string };
   mode: "owner" | "admin" | "employee";
@@ -569,6 +581,7 @@ export type PortfolioDashboard = {
   currencies: string[];
   mixed_currencies: boolean;
   summary: MetricSummary;
+  total_available_balance: number;
   month_to_date: { sales: number; profit: number };
   profit_collected_this_month: number;
   businesses: Array<{
@@ -583,6 +596,7 @@ export type PortfolioDashboard = {
     profit_share_percent: number;
     can_view_financials: boolean;
     metrics: MetricSummary;
+    available_balance: AvailableBalance;
     collected_this_month: number;
     change: { net_sales: number; net_profit: number };
   }>;
@@ -610,6 +624,8 @@ export type BusinessDashboard = {
     code: string;
     currency: string;
     business_type: string;
+    category?: string;
+    is_installment: boolean;
     my_role: BusinessRole;
     full_control: boolean;
     is_founder: boolean;
@@ -622,6 +638,7 @@ export type BusinessDashboard = {
   profit_collected_this_month: number;
   permissions: Record<string, boolean>;
   summary: MetricSummary;
+  available_balance: AvailableBalance;
   trend: TrendPoint[];
   top_sellers: SellerRow[];
   top_products: Array<{ name: string; quantity: number; sales: number }>;
@@ -716,6 +733,7 @@ export type ProfitLossReport = {
     expenses: number;
     commissions: number;
     payroll_cost: number;
+    writer_cost: number;
     net_profit: number;
     tax_collected: number;
     cash_collected: number;

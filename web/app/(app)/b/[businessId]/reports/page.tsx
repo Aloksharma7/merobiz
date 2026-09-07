@@ -83,13 +83,14 @@ export default function ReportsPage() {
 
       <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(330px,0.85fr)]">
         <Card>
-          <CardHeader title="Profit bridge" description={`Provisional result for ${profitLoss.data.period.label}.`} action={<Badge tone="warning">Live estimate</Badge>} />
+          <CardHeader title="How net profit is calculated" description={`Not final yet for ${profitLoss.data.period.label} — can still change.`} action={<Badge tone="warning">Live estimate</Badge>} />
           <CardBody>
             <ProfitLine label="Net sales" value={report.net_sales} currency={currency} strong />
-            <ProfitLine label="Direct cost of sales" value={-report.cost_of_sales} currency={currency} subdued />
+            <ProfitLine label="Direct cost" value={-report.cost_of_sales} currency={currency} subdued />
             <ProfitLine label="Gross profit" value={report.gross_profit} currency={currency} subtotal />
-            <ProfitLine label="Approved operating expenses" value={-report.expenses} currency={currency} subdued />
+            <ProfitLine label="Approved expenses" value={-report.expenses} currency={currency} subdued />
             <ProfitLine label="Payroll paid" value={-report.payroll_cost} currency={currency} subdued />
+            {business.is_installment ? <ProfitLine label="Writer payments" value={-report.writer_cost} currency={currency} subdued /> : null}
             <div className="mt-3 flex items-center justify-between gap-4 rounded-2xl bg-[var(--brand-deep)] px-4 py-4 text-[var(--on-brand-deep)]">
               <div><p className="text-xs font-semibold text-[var(--on-brand-deep)]/60">Business net profit</p><p className="mt-1 text-[11px] text-[var(--on-brand-deep)]/45">Before partner distribution</p></div>
               <p className="text-xl font-black tracking-[-0.03em]">{money(report.net_profit, currency)}</p>
@@ -127,7 +128,7 @@ export default function ReportsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-2xl bg-[var(--surface-soft)] px-4 py-3 text-right sm:grid-cols-3">
                     <SmallValue label="Net sales" value={money(period.net_sales, currency)} />
-                    <SmallValue label="Expenses" value={money(period.expenses + period.payroll_cost, currency)} />
+                    <SmallValue label="Expenses" value={money(period.expenses + period.payroll_cost + period.writer_cost, currency)} />
                     <SmallValue label="Net profit" value={money(period.net_profit, currency)} strong />
                   </div>
                 </div>

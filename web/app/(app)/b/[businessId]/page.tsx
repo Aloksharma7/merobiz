@@ -65,7 +65,7 @@ export default function BusinessDashboardPage() {
       <PageHeader
         eyebrow={employee ? <span className="flex items-center gap-2"><BusinessMark business={business} compact />{branding.tagline || "My sales"}</span> : <span className="flex items-center gap-2"><span className="grid h-6 min-w-6 place-items-center rounded-md bg-[var(--brand-soft)] px-1.5 text-[10px] font-black text-[var(--ink)]">{data.business.code}</span>{humanize(data.business.business_type)}</span>}
         title={data.business.name}
-        description={owner ? `${data.business.profit_share_percent}% of finalized net profit is attributable to your ownership agreement.` : admin ? "Full business performance with staff sales and operational controls." : `Your sales, invoices, collections and customer work for ${data.business.name}. Only your own sales activity is included here.`}
+        description={owner ? `You get ${data.business.profit_share_percent}% of the final net profit, based on your ownership.` : admin ? "Full business performance with staff sales and operational controls." : `Your sales, invoices, collections and customer work for ${data.business.name}. Only your own sales activity is included here.`}
         actions={data.permissions.can_manage_sales ? <LinkButton href={`/b/${businessId}/sales?new=1`} leftIcon={<Plus size={17} />}>New sale</LinkButton> : undefined}
       />
 
@@ -84,11 +84,28 @@ export default function BusinessDashboardPage() {
       </section>
       <ProfitWithdrawalFormModal open={withdrawalOpen} onClose={() => setWithdrawalOpen(false)} businesses={[{ id: Number(businessId), name: business.name }]} />
 
+      {financial ? (
+        <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-6">
+          <div className="rounded-2xl bg-[var(--brand-deep)] px-4 py-3.5 text-[var(--on-brand-deep)] sm:col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/55">Available balance</p>
+            <p className="mt-1.5 text-2xl font-black tracking-[-0.03em]">{money(data.available_balance.available_balance, currency)}</p>
+            <p className="mt-1 text-[11px] leading-4 text-[var(--on-brand-deep)]/52">What the business actually has right now — not tied to the date filter below.</p>
+          </div>
+          {[
+            ["Collected (lifetime)", data.available_balance.collected],
+            ["Expenses paid", -data.available_balance.expenses_paid],
+            ["Payroll paid", -data.available_balance.payroll_paid],
+            ...(data.business.is_installment ? [["Writer payments", -data.available_balance.writer_paid]] : []),
+            ["Owner withdrawals", -data.available_balance.owner_withdrawn],
+          ].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{Number(value) < 0 ? "− " : ""}{money(Math.abs(Number(value)), currency)}</p></div>)}
+        </section>
+      ) : null}
+
       <DateRangeControl value={range} onChange={setRange} />
 
       {layout.show_overview_cards ? (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard emphasis={financial} label={owner ? "Your expected profit" : admin ? "Business expected profit" : "My sales"} value={owner ? data.summary.attributable_profit ?? 0 : admin ? data.summary.net_profit : data.summary.net_sales} currency={currency} icon={CircleDollarSign} hint={owner ? `${data.business.profit_share_percent}% of live net profit, not yet withdrawn` : admin ? "Sales after costs and expenses" : "Only invoices created by you"} />
+          <MetricCard emphasis={financial} label={owner ? "Your expected profit" : admin ? "Business expected profit" : "My sales"} value={owner ? data.summary.attributable_profit ?? 0 : admin ? data.summary.net_profit : data.summary.net_sales} currency={currency} icon={CircleDollarSign} hint={owner ? `${data.business.profit_share_percent}% of profit so far, not yet taken out` : admin ? "Sales after costs and expenses" : "Only invoices created by you"} />
           <MetricCard label={employee ? "My invoices" : "Net sales"} value={employee ? data.summary.invoice_count : data.summary.net_sales} currency={currency} valueFormatter={employee ? (value) => number(value) : undefined} icon={TrendingUp} change={employee ? undefined : data.summary.net_sales_change} hint={employee ? `${money(data.summary.net_sales, currency)} total sales` : `${data.summary.invoice_count} invoices`} />
           <MetricCard label={employee ? "My collections" : "Cash collected"} value={data.summary.cash_collected} currency={currency} icon={Landmark} hint={employee ? "Payments collected against your invoices" : "Payments received during this period"} />
           <MetricCard label={employee ? "My outstanding" : "Receivables"} value={data.summary.receivables} currency={currency} icon={HandCoins} hint={employee ? "Unpaid balance on your invoices" : "Balance on invoices dated in this range"} />
@@ -97,13 +114,14 @@ export default function BusinessDashboardPage() {
 
       {financial && layout.show_profit_breakdown ? (
         <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-4">
-          {[
+          {([
             ["Expected gross profit", data.summary.gross_profit, "Sales minus direct cost"],
-            ["Approved expenses", data.summary.expenses, "Operating costs"],
+            ["Approved expenses", data.summary.expenses, "Business costs"],
             ["Payroll paid", data.summary.payroll_cost, "Actual salary, commission and advance payouts"],
+            ...(data.business.is_installment ? [["Writer payments", data.summary.writer_cost, "Paid to writers for delivered work"]] : []),
             ["Expected net profit", data.summary.net_profit, "Before owner distribution, not yet withdrawn"],
-          ].map(([label, value, note]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(Number(value), currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">{String(note)}</p></div>)}
-          <div className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5 sm:col-span-2 xl:col-span-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Commission accrued (estimated)</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(data.summary.commissions, currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">What commission-based staff are estimated to be owed from their sales so far — this only reduces profit once actually paid out from their Payroll page, alongside everyone else's payments.</p></div>
+          ] as Array<[string, number, string]>).map(([label, value, note]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(Number(value), currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">{String(note)}</p></div>)}
+          <div className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5 sm:col-span-2 xl:col-span-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Commission earned so far (estimated)</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(data.summary.commissions, currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">What commission-based staff are estimated to be owed from their sales so far — this only reduces profit once actually paid out from their Payroll page, alongside everyone else's payments.</p></div>
         </section>
       ) : null}
 
@@ -171,7 +189,7 @@ export default function BusinessDashboardPage() {
           ) : null}
           {mySalaryQuery.data.outstanding_loan > 0 ? (
             <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-soft)] p-5 sm:col-span-2">
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Advance you still owe</p>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Loan you still owe</p>
               <p className="mt-2 text-3xl font-black tracking-[-0.04em]">{money(mySalaryQuery.data.outstanding_loan, currency)}</p>
               <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">Given as a loan, separate from your regular pay. Ask an admin if you're unsure why.</p>
             </div>

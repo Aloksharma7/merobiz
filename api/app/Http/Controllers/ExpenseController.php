@@ -146,10 +146,13 @@ class ExpenseController extends Controller
     {
         $membership = $this->membership($request);
         $canManage = $membership->allows('expenses.manage');
-        $canDeleteOwnPending = $membership->allows('expenses.create')
+        // Expenses are approved immediately now, so there's no "still pending" window
+        // to gate this on — instead, the person who submitted it can undo their own
+        // mistake on the same day, same as fixing a typo right after making it.
+        $canDeleteOwnToday = $membership->allows('expenses.create')
             && $expense->submitted_by === $request->user()->id
-            && $expense->status === ExpenseStatus::Pending;
-        abort_unless($canManage || $canDeleteOwnPending, 403);
+            && $expense->created_at->isToday();
+        abort_unless($canManage || $canDeleteOwnToday, 403);
         $this->assertBusiness($business, $expense);
 
         if ($business->isDateClosed($expense->expense_date)) {

@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\BusinessRole;
 use App\Models\Business;
+use App\Models\Expense;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -49,7 +51,29 @@ class EmployeeExpensesAndExportTest extends TestCase
         $this->patchJson("/api/businesses/{$business->id}/expenses/{$expenseId}/status", ['status' => 'rejected'])
             ->assertForbidden();
 
-        // An employee's own expense is already approved, so they can no longer delete it themselves.
+        // An employee's own expense is already approved, but they can still undo
+        // their own same-day mistake — approval no longer gates this, the date does.
+        $this->deleteJson("/api/businesses/{$business->id}/expenses/{$expenseId}")->assertOk();
+    }
+
+    public function test_an_employee_cannot_delete_their_own_expense_after_the_day_it_was_added(): void
+    {
+        $owner = $this->user('Owner', 'owner-exp-old@example.test');
+        $employee = $this->user('Employee', 'employee-exp-old@example.test');
+        $business = $this->business($owner);
+        $business->memberships()->createMany([
+            ['user_id' => $owner->id, 'role' => BusinessRole::Owner, 'active' => true],
+            ['user_id' => $employee->id, 'role' => BusinessRole::Employee, 'active' => true],
+        ]);
+
+        Sanctum::actingAs($employee);
+        $response = $this->postJson("/api/businesses/{$business->id}/expenses", [
+            'category' => 'Travel', 'expense_date' => today()->toDateString(), 'amount' => 250, 'payment_method' => 'cash',
+        ])->assertCreated();
+        $expenseId = $response->json('expense.id');
+
+        Expense::query()->whereKey($expenseId)->update(['created_at' => CarbonImmutable::yesterday()]);
+
         $this->deleteJson("/api/businesses/{$business->id}/expenses/{$expenseId}")->assertForbidden();
 
         Sanctum::actingAs($owner);

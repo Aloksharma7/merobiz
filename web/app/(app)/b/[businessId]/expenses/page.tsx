@@ -16,6 +16,7 @@ import { useBusinesses } from "@/lib/business-context";
 import type { ApiMessage, Expense, ExpenseStatus, Paginated } from "@/lib/types";
 import { humanize, money, prettyDate } from "@/lib/utils";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isToday, parseISO } from "date-fns";
 import { Check, Clock3, Download, Plus, Receipt, Search, Trash2, WalletCards, X } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -78,7 +79,9 @@ function ExpensesPageContent() {
   const rows = query.data?.data ?? [];
   const summary = rows.reduce((acc, row) => ({ total: acc.total + row.amount, approved: acc.approved + (row.status === "approved" ? row.amount : 0), pending: acc.pending + (row.status === "pending" ? row.amount : 0) }), { total: 0, approved: 0, pending: 0 });
   const canApprove = can(business, "expenses.approve");
-  const canDeleteExpense = (expense: Expense) => canManage || (can(business, "expenses.create") && expense.submitter?.id === user?.id && expense.status === "pending");
+  // Expenses approve immediately now, so there's no "still pending" window — the
+  // person who added it can undo their own mistake the same day they made it.
+  const canDeleteExpense = (expense: Expense) => canManage || (can(business, "expenses.create") && expense.submitter?.id === user?.id && isToday(parseISO(expense.created_at)));
   if (!business) return <PageLoading />;
   if (query.isError) return <ErrorState onRetry={() => void query.refetch()} />;
 

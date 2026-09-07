@@ -87,15 +87,15 @@ export function PayrollPanel({ businessId, member, currency }: { businessId: str
           {pending < 0 ? <p className="mt-1 text-[11px] leading-4 text-[var(--ink-soft)]">Will be deducted from what they earn next.</p> : null}
         </div>
         <div className="rounded-2xl bg-[var(--surface-soft)] p-4">
-          <p className="text-xs font-bold uppercase tracking-[0.1em] text-[var(--ink-soft)]">Outstanding loan</p>
+          <p className="text-xs font-bold uppercase tracking-[0.1em] text-[var(--ink-soft)]">Loan still owed</p>
           <p className="mt-1 text-xl font-black">{money(outstandingLoan, currency)}</p>
-          {outstandingLoan > 0 ? <p className="mt-1 text-[11px] leading-4 text-[var(--ink-soft)]">Given as an advance that doesn't count against pay.</p> : null}
+          {outstandingLoan > 0 ? <p className="mt-1 text-[11px] leading-4 text-[var(--ink-soft)]">Given as a loan that doesn't count against pay.</p> : null}
         </div>
       </div>
 
       <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <FieldShell label="Entry type" htmlFor="salary-entry-type" hint="What kind of payment is this?">
+          <FieldShell label="Type" htmlFor="salary-entry-type" hint="What kind of payment is this?">
             <Select id="salary-entry-type" value={entryType} onChange={(event) => setEntryType(event.target.value as SalaryEntryType)}>
               <option value="payment">Regular payment</option>
               <option value="advance">Advance (counts against pay)</option>

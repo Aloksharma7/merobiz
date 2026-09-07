@@ -56,7 +56,7 @@ export default function PortfolioPage() {
 
   return (
     <div className="space-y-7">
-      <section className={cn("grid gap-4 sm:grid-cols-2", ownerMode ? "xl:grid-cols-3" : "xl:grid-cols-2")}>
+      <section className={cn("grid gap-4 sm:grid-cols-2", ownerMode ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
         <MyProfileCard
           name={user?.name ?? ""}
           email={user?.email}
@@ -65,6 +65,7 @@ export default function PortfolioPage() {
           onLogProfit={ownerMode && ownedBusinesses.length ? () => setWithdrawalOpen(true) : undefined}
         />
         <MetricCard emphasis={!ownerMode} label={ownerMode ? "This month's expected profit" : "This month's expected net profit"} value={data.month_to_date.profit} currency={currency} icon={CalendarClock} hint="Month to date" />
+        <MetricCard label="Available balance" value={data.total_available_balance} currency={currency} icon={Landmark} hint="Across all your businesses, right now — not tied to the date filter below" />
         {ownerMode ? (
           <MetricCard
             emphasis
@@ -90,7 +91,7 @@ export default function PortfolioPage() {
       <PageHeader
         eyebrow={ownerMode ? "Portfolio owner" : "Administration"}
         title={ownerMode ? "All your businesses, one clear answer" : "Business overview"}
-        description={ownerMode ? "See each business and the amount attributable to your ownership." : "See the businesses assigned to you and monitor sales, staff and daily performance from one place."}
+        description={ownerMode ? "See each business and how much of the profit is yours." : "See the businesses assigned to you and monitor sales, staff and daily performance from one place."}
         actions={data.can_create_business ? <Button leftIcon={<Plus size={17} />} onClick={() => setBusinessModal(true)}>Add business</Button> : undefined}
       />
 
@@ -111,7 +112,7 @@ export default function PortfolioPage() {
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Portfolio summary">
-            {ownerMode ? <MetricCard emphasis label="Your expected profit" value={data.summary.attributable_profit ?? 0} currency={currency} icon={CircleDollarSign} hint="Ownership-adjusted, not yet withdrawn" /> : <MetricCard emphasis label="Business expected profit" value={data.summary.net_profit} currency={currency} icon={CircleDollarSign} hint="Sales after costs, expenses and commissions" />}
+            {ownerMode ? <MetricCard emphasis label="Your expected profit" value={data.summary.attributable_profit ?? 0} currency={currency} icon={CircleDollarSign} hint="Based on your ownership share, not yet taken out" /> : <MetricCard emphasis label="Business expected profit" value={data.summary.net_profit} currency={currency} icon={CircleDollarSign} hint="Sales after costs, expenses and commissions" />}
             <MetricCard label="Combined net sales" value={data.summary.net_sales} currency={currency} icon={TrendingUp} hint={`${data.summary.invoice_count} invoices`} />
             <MetricCard label="Cash collected" value={data.summary.cash_collected} currency={currency} icon={Landmark} hint="Payments received in this period" />
             <MetricCard label="Customer receivables" value={data.summary.receivables} currency={currency} icon={HandCoins} hint="Balance on open invoices" />

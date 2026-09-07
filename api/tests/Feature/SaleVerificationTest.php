@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Enums\BusinessRole;
 use App\Enums\InvoiceStatus;
-use App\Enums\SaleVerificationStatus;
 use App\Models\Business;
 use App\Models\User;
 use App\Services\DashboardService;
@@ -78,10 +77,7 @@ class SaleVerificationTest extends TestCase
             ]],
         ]);
 
-        // Legacy verification columns stay compatible with existing databases, but
-        // every new sale is accepted automatically and requires no admin action.
-        $this->assertSame(SaleVerificationStatus::Verified, $invoice->verification_status);
-        $this->assertSame($employee->id, $invoice->verified_by);
+        // Every new sale is accepted automatically and requires no admin action.
         $this->assertSame('500.00', (string) $invoice->cost_amount);
         $this->assertSame('0.00', (string) $invoice->tax_amount);
 

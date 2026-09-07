@@ -18,6 +18,7 @@ use App\Models\ProjectProfitApproval;
 use App\Models\ProjectRefund;
 use App\Models\SalaryPayment;
 use App\Models\User;
+use App\Models\WriterPayment;
 use App\Support\DateRange;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -49,6 +50,8 @@ class DashboardService
         $summary = $this->emptyMetrics();
         $summary['attributable_profit'] = 0.0;
 
+        $totalAvailableBalance = 0.0;
+
         foreach ($memberships as $membership) {
             $business = $membership->business;
             $canViewFinancials = $membership->allows('dashboard.financial');
@@ -63,6 +66,8 @@ class DashboardService
             $attributable = $canViewFinancials
                 ? $this->attributableProfit($user, $business, $range->start, $range->end)
                 : 0.0;
+            $availableBalance = $canViewFinancials ? $this->availableBalance($business) : $this->emptyAvailableBalance();
+            $totalAvailableBalance += $availableBalance['available_balance'];
             foreach (array_keys($this->emptyMetrics()) as $key) {
                 $summary[$key] += $metrics[$key];
             }
@@ -81,6 +86,7 @@ class DashboardService
                 'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
                 'can_view_financials' => $canViewFinancials,
                 'metrics' => $metrics + ['attributable_profit' => $attributable],
+                'available_balance' => $availableBalance,
                 'collected_this_month' => $this->collectedThisMonth($user->id, $business->id),
                 'change' => [
                     'net_sales' => $this->percentageChange($metrics['net_sales'], $previousMetrics['net_sales']),
@@ -139,6 +145,7 @@ class DashboardService
             'currencies' => $currencies,
             'mixed_currencies' => count($currencies) > 1,
             'summary' => $summary,
+            'total_available_balance' => round($totalAvailableBalance, 2),
             'month_to_date' => $this->portfolioQuickWindow($memberships, $user, $today->startOfMonth(), $today, $portfolioMode),
             'profit_collected_this_month' => $this->collectedThisMonth($user->id),
             'businesses' => $businessRows,
@@ -245,6 +252,10 @@ class DashboardService
                 'net_sales_change' => $this->percentageChange($metrics['net_sales'], $previousMetrics['net_sales']),
                 'net_profit_change' => $this->percentageChange($metrics['net_profit'], $previousMetrics['net_profit']),
             ],
+            // Not date-range scoped on purpose — a balance is a point-in-time snapshot
+            // of what the business actually has, not a period total. It only ever
+            // changes because of a new transaction, never because the date filter moved.
+            'available_balance' => $canViewFinancials ? $this->availableBalance($business) : $this->emptyAvailableBalance(),
             'trend' => $this->businessTrend($business, $range->end, $creator),
             'top_sellers' => $canViewFinancials
                 ? $this->topSellers([$business->id], $range->start, $range->end)
@@ -258,7 +269,7 @@ class DashboardService
     }
 
     /**
-     * @return array{net_sales: float, invoiced_total: float, tax_collected: float, cost_of_sales: float, gross_profit: float, expenses: float, commissions: float, payroll_cost: float, project_profit: float, refunds: float, net_profit: float, cash_collected: float, receivables: float, invoice_count: float, average_invoice: float}
+     * @return array{net_sales: float, invoiced_total: float, tax_collected: float, cost_of_sales: float, gross_profit: float, expenses: float, commissions: float, payroll_cost: float, writer_cost: float, project_profit: float, refunds: float, net_profit: float, cash_collected: float, receivables: float, invoice_count: float, average_invoice: float}
      */
     public function metrics(Business $business, CarbonInterface $start, CarbonInterface $end, ?User $creator = null): array
     {
@@ -323,11 +334,18 @@ class DashboardService
         // payment/advance (either pay type) and any loan that gets written off.
         // A loan that hasn't been written off is excluded — it's still expected back.
         $payrollCost = $creator ? 0.0 : $this->payrollCost($business, $start, $end);
+        // A writer payment is a real cost the same way payroll is — actually paying a
+        // writer for a file must reduce profit, not just adjust the project's own
+        // "still due to writer" tracker. Only installment businesses can ever have
+        // writer payments — skip the query entirely everywhere else, the same reason
+        // payrollCost() is a single query rather than two: metrics() runs up to ten
+        // times per dashboard load.
+        $writerCost = ($creator || ! $isInstallment) ? 0.0 : $this->writerCost($business, $start, $end);
         $cashCollected = (float) $payments->sum('amount') - $refunds;
 
         $netSales = $subtotal - $discounts;
         $grossProfit = $isInstallment ? 0.0 : ($netSales - $cost);
-        $netProfit = $grossProfit - $expenses - $payrollCost - $refunds + $projectProfit;
+        $netProfit = $grossProfit - $expenses - $payrollCost - $writerCost - $refunds + $projectProfit;
 
         return [
             'net_sales' => round($netSales, 2),
@@ -338,6 +356,7 @@ class DashboardService
             'expenses' => round($expenses, 2),
             'commissions' => round($commissions, 2),
             'payroll_cost' => round($payrollCost, 2),
+            'writer_cost' => round($writerCost, 2),
             'project_profit' => round($projectProfit, 2),
             'refunds' => round($refunds, 2),
             'net_profit' => round($netProfit, 2),
@@ -345,6 +364,65 @@ class DashboardService
             'receivables' => round($receivables, 2),
             'invoice_count' => $invoiceCount,
             'average_invoice' => $invoiceCount > 0 ? round($invoicedTotal / $invoiceCount, 2) : 0.0,
+        ];
+    }
+
+    /**
+     * The business's actual cash position — everything that's ever come in minus
+     * everything that's ever gone out, for any reason. Deliberately not date-range
+     * scoped: a balance is what the business has right now, not a period total.
+     * This is a cash view, not a profit view, so it differs from net_profit in two
+     * ways: a loan given to staff reduces it immediately (the cash is gone, even
+     * though it's not a cost — see payrollCost()), and an owner's profit withdrawal
+     * reduces it too (real cash out, even though it's a distribution, not a cost).
+     *
+     * @return array{available_balance: float, collected: float, refunded: float, expenses_paid: float, payroll_paid: float, writer_paid: float, owner_withdrawn: float}
+     */
+    public function availableBalance(Business $business): array
+    {
+        $isInstallment = $business->category === BusinessCategory::Installment;
+
+        $collected = (float) $business->payments()->sum('amount');
+        $refunded = $isInstallment
+            ? (float) ProjectRefund::query()->where('business_id', $business->id)->sum('amount')
+            : 0.0;
+        $expensesPaid = (float) $business->expenses()->where('status', 'approved')->sum('amount');
+        // A loan counts here (real cash left the business the moment it was given),
+        // unlike payrollCost() where a loan is excluded until written off. A
+        // write-off is the opposite: no new cash moves, so it's excluded here.
+        $payrollPaid = (float) SalaryPayment::query()
+            ->where('business_id', $business->id)
+            ->whereIn('entry_type', [SalaryEntryType::Payment->value, SalaryEntryType::Advance->value, SalaryEntryType::Loan->value])
+            ->sum('amount');
+        $writerPaid = $isInstallment
+            ? (float) WriterPayment::query()->where('business_id', $business->id)->sum('amount')
+            : 0.0;
+        $ownerWithdrawn = (float) ProfitWithdrawal::query()->where('business_id', $business->id)->sum('amount');
+
+        $balance = $collected - $refunded - $expensesPaid - $payrollPaid - $writerPaid - $ownerWithdrawn;
+
+        return [
+            'available_balance' => round($balance, 2),
+            'collected' => round($collected, 2),
+            'refunded' => round($refunded, 2),
+            'expenses_paid' => round($expensesPaid, 2),
+            'payroll_paid' => round($payrollPaid, 2),
+            'writer_paid' => round($writerPaid, 2),
+            'owner_withdrawn' => round($ownerWithdrawn, 2),
+        ];
+    }
+
+    /** @return array{available_balance: float, collected: float, refunded: float, expenses_paid: float, payroll_paid: float, writer_paid: float, owner_withdrawn: float} */
+    private function emptyAvailableBalance(): array
+    {
+        return [
+            'available_balance' => 0.0,
+            'collected' => 0.0,
+            'refunded' => 0.0,
+            'expenses_paid' => 0.0,
+            'payroll_paid' => 0.0,
+            'writer_paid' => 0.0,
+            'owner_withdrawn' => 0.0,
         ];
     }
 
@@ -358,6 +436,14 @@ class DashboardService
             ->where('business_id', $business->id)
             ->whereIn('entry_type', [SalaryEntryType::Payment->value, SalaryEntryType::Advance->value, SalaryEntryType::WriteOff->value])
             ->whereBetween('payment_date', [$start->toDateString(), $end->toDateString()])
+            ->sum('amount');
+    }
+
+    private function writerCost(Business $business, CarbonInterface $start, CarbonInterface $end): float
+    {
+        return (float) WriterPayment::query()
+            ->where('business_id', $business->id)
+            ->whereBetween('paid_on', [$start->toDateString(), $end->toDateString()])
             ->sum('amount');
     }
 
@@ -473,6 +559,7 @@ class DashboardService
             'expenses' => 0.0,
             'commissions' => 0.0,
             'payroll_cost' => 0.0,
+            'writer_cost' => 0.0,
             'project_profit' => 0.0,
             'refunds' => 0.0,
             'net_profit' => 0.0,
@@ -491,6 +578,7 @@ class DashboardService
         $metrics['gross_profit'] = 0.0;
         $metrics['expenses'] = 0.0;
         $metrics['payroll_cost'] = 0.0;
+        $metrics['writer_cost'] = 0.0;
         $metrics['project_profit'] = 0.0;
         $metrics['net_profit'] = 0.0;
 

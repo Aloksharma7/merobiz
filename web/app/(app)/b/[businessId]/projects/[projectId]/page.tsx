@@ -173,7 +173,7 @@ export default function ProjectDetailPage() {
 
         {business.full_control ? (
           <Card className="overflow-hidden">
-            <CardHeader title={<span className="flex items-center gap-2"><CircleDollarSign size={16} />Profit approval</span>} description="Only counts toward this business's expected profit once approved here." />
+            <CardHeader title={<span className="flex items-center gap-2"><CircleDollarSign size={16} />Profit approval</span>} description="Only counts toward this business's expected profit once approved here. Writer payments are deducted automatically elsewhere — don't subtract them from this figure yourself." />
             <CardBody className="space-y-4">
               {project.profit_approvals?.length ? (
                 <div className="space-y-2">
@@ -191,7 +191,7 @@ export default function ProjectDetailPage() {
                   <FieldShell label="Profit amount" htmlFor="project-approve-amount" error={errors.amount?.[0]}><Input id="project-approve-amount" type="number" min="0.01" step="0.01" placeholder="0.00" value={profitAmount} onChange={(event) => setProfitAmount(event.target.value)} className="w-32" /></FieldShell>
                   <Button size="sm" variant="secondary" disabled={!profitAmount} loading={approvalMutation.isPending} onClick={() => approvalMutation.mutate()}>Approve profit</Button>
                 </div>
-                <FieldShell label="Notes" htmlFor="project-approve-notes"><Textarea id="project-approve-notes" className="min-h-16 bg-white text-[var(--ink)]" value={profitNotes} onChange={(event) => setProfitNotes(event.target.value)} placeholder="e.g. Deal amount minus writer payment" /></FieldShell>
+                <FieldShell label="Notes" htmlFor="project-approve-notes"><Textarea id="project-approve-notes" className="min-h-16 bg-white text-[var(--ink)]" value={profitNotes} onChange={(event) => setProfitNotes(event.target.value)} placeholder="e.g. Deal amount, before writer payment" /></FieldShell>
               </div>
             </CardBody>
           </Card>

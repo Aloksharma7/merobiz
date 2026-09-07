@@ -35,6 +35,7 @@ class ReportController extends Controller
                 'expenses' => $metrics['expenses'],
                 'commissions' => $metrics['commissions'],
                 'payroll_cost' => $metrics['payroll_cost'],
+                'writer_cost' => $metrics['writer_cost'],
                 'net_profit' => $metrics['net_profit'],
                 'tax_collected' => $metrics['tax_collected'],
                 'cash_collected' => $metrics['cash_collected'],

@@ -23,6 +23,7 @@ class ProfitPeriodResource extends JsonResource
             'expenses' => (float) $this->expenses,
             'commissions' => (float) $this->commissions,
             'payroll_cost' => (float) $this->payroll_cost,
+            'writer_cost' => (float) $this->writer_cost,
             'net_profit' => (float) $this->net_profit,
             'notes' => $this->notes,
             'closed_at' => $this->closed_at?->toIso8601String(),

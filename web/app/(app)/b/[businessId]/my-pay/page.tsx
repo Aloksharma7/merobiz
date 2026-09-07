@@ -38,9 +38,9 @@ export default function MyPayPage() {
         <>
           <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <Mini label={data.pay_type === "fixed_salary" ? "Monthly rate" : "Pay type"} value={data.pay_type === "fixed_salary" ? money(data.salary_amount, currency) : "Commission"} />
-            <Mini label="Accrued so far" value={money(data.accrued, currency)} />
+            <Mini label="Earned so far" value={money(data.accrued, currency)} />
             <Mini label="Paid so far" value={money(data.paid_total, currency)} />
-            <Mini label={data.pending < 0 ? "Overpaid" : "Pending"} value={money(Math.abs(data.pending), currency)} emphasis={data.pending !== 0} danger={data.pending < 0} />
+            <Mini label={data.pending < 0 ? "Overpaid" : "Owed"} value={money(Math.abs(data.pending), currency)} emphasis={data.pending !== 0} danger={data.pending < 0} />
           </section>
           {data.pending < 0 ? <p className="text-xs font-semibold text-[var(--info)]">You were advanced more than you've earned — this will be deducted from what you earn next.</p> : null}
         </>
@@ -55,7 +55,7 @@ export default function MyPayPage() {
           <div className="flex items-start gap-3">
             <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]"><HandCoins size={17} /></span>
             <div>
-              <p className="font-bold">Advance you still owe: {money(data.outstanding_loan, currency)}</p>
+              <p className="font-bold">Loan you still owe: {money(data.outstanding_loan, currency)}</p>
               <p className="mt-1 text-sm text-[var(--ink-soft)]">Given as a loan, separate from your regular pay. Ask an admin if you're unsure why.</p>
             </div>
           </div>
