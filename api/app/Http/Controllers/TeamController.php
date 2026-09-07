@@ -220,7 +220,7 @@ class TeamController extends Controller
                 'commission_rate' => $data['commission_rate'] ?? 0,
                 'active' => true,
                 'joined_at' => now()->toDateString(),
-                'pay_type' => $data['pay_type'] ?? PayType::Commission->value,
+                'pay_type' => $data['pay_type'] ?? PayType::FixedSalary->value,
                 'salary_amount' => $data['salary_amount'] ?? 0,
                 'salary_visible_to_staff' => $data['salary_visible_to_staff'] ?? false,
             ]);
