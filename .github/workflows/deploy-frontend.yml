@@ -40,9 +40,13 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
-      # Only ever touches .next/, node_modules/, public/, server.js, package.json, .env.
-      # Never touches .htaccess, cgi-bin, .well-known, stderr.log, tmp, or anything else
-      # already sitting in that folder.
+      # Only ever touches .next/, public/, server.js, package.json, .env.
+      # Deliberately never touches node_modules/ — dependencies are already
+      # installed on the server (via cPanel's own npm install) and are left
+      # alone here. If you add/update a package in web/package.json, run
+      # npm install on the server once yourself after that deploy.
+      # Also never touches .htaccess, cgi-bin, .well-known, stderr.log, tmp,
+      # or anything else already sitting in that folder.
       - name: Upload only the files this app owns
         working-directory: web/serverupload
         run: |
@@ -51,7 +55,6 @@ jobs:
           REMOTE="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:business.techchamp.com.np"
           RSYNC_SSH="ssh -p ${{ secrets.SSH_PORT }}"
           rsync -avz --delete -e "$RSYNC_SSH" .next/ "$REMOTE/.next/"
-          rsync -avz --delete -e "$RSYNC_SSH" node_modules/ "$REMOTE/node_modules/"
           rsync -avz --delete -e "$RSYNC_SSH" public/ "$REMOTE/public/"
           rsync -avz -e "$RSYNC_SSH" server.js package.json .env "$REMOTE/"
 
