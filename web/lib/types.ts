@@ -476,7 +476,7 @@ export type SalarySummary = {
   outstanding_loan: number;
 };
 
-export type MySalary = { visible: false; outstanding_loan: number } | ({ visible: true; payments: SalaryPaymentRecord[] } & SalarySummary);
+export type MySalary = { visible: false; outstanding_loan: number } | ({ visible: true; payments?: SalaryPaymentRecord[] } & SalarySummary);
 
 export type ProfitAllocation = {
   id: number;
@@ -581,7 +581,7 @@ export type PortfolioDashboard = {
   currencies: string[];
   mixed_currencies: boolean;
   summary: MetricSummary;
-  total_available_balance: number;
+  total_available_balance?: number;
   month_to_date: { sales: number; profit: number };
   profit_collected_this_month: number;
   businesses: Array<{
@@ -596,7 +596,7 @@ export type PortfolioDashboard = {
     profit_share_percent: number;
     can_view_financials: boolean;
     metrics: MetricSummary;
-    available_balance: AvailableBalance;
+    available_balance?: AvailableBalance;
     collected_this_month: number;
     change: { net_sales: number; net_profit: number };
   }>;
@@ -638,7 +638,7 @@ export type BusinessDashboard = {
   profit_collected_this_month: number;
   permissions: Record<string, boolean>;
   summary: MetricSummary;
-  available_balance: AvailableBalance;
+  available_balance?: AvailableBalance;
   trend: TrendPoint[];
   top_sellers: SellerRow[];
   top_products: Array<{ name: string; quantity: number; sales: number }>;

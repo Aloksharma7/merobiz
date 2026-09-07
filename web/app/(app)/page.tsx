@@ -65,7 +65,7 @@ export default function PortfolioPage() {
           onLogProfit={ownerMode && ownedBusinesses.length ? () => setWithdrawalOpen(true) : undefined}
         />
         <MetricCard emphasis={!ownerMode} label={ownerMode ? "This month's expected profit" : "This month's expected net profit"} value={data.month_to_date.profit} currency={currency} icon={CalendarClock} hint="Month to date" />
-        <MetricCard label="Available balance" value={data.total_available_balance} currency={currency} icon={Landmark} hint="Across all your businesses, right now — not tied to the date filter below" />
+        <MetricCard label="Available balance" value={data.total_available_balance ?? 0} currency={currency} icon={Landmark} hint="Across all your businesses, right now — not tied to the date filter below" />
         {ownerMode ? (
           <MetricCard
             emphasis

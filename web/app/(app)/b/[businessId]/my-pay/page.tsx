@@ -66,7 +66,7 @@ export default function MyPayPage() {
         <Card className="overflow-hidden">
           <CardHeader title={<span className="flex items-center gap-2"><Wallet2 size={16} />Payment history</span>} description="Every payment, advance, loan or settlement recorded against you." />
           <CardBody>
-            {data.payments.length ? <PayrollHistoryList payments={data.payments} currency={currency} /> : <EmptyState icon={Wallet2} title="Nothing recorded yet" description="Payments an admin records for you will show up here." />}
+            {data.payments?.length ? <PayrollHistoryList payments={data.payments} currency={currency} /> : <EmptyState icon={Wallet2} title="Nothing recorded yet" description="Payments an admin records for you will show up here." />}
           </CardBody>
         </Card>
       ) : null}

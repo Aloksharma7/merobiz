@@ -52,6 +52,10 @@ export default function BusinessDashboardPage() {
   const employee = data.business.my_role === "employee";
   const branding = brandingFor(business);
   const layout = data.business.dashboard_settings;
+  // Falls back to zeros if the API hasn't started sending this yet (e.g. the
+  // backend deploy hasn't caught up with the frontend one) — never crash the
+  // whole dashboard over one optional section.
+  const balance = data.available_balance ?? { available_balance: 0, collected: 0, refunded: 0, expenses_paid: 0, payroll_paid: 0, writer_paid: 0, owner_withdrawn: 0 };
 
   const quickActions = [
     data.permissions.can_manage_sales && { label: "New sale", description: "Create an invoice", href: `/b/${businessId}/sales?new=1`, icon: ReceiptText },
@@ -88,15 +92,15 @@ export default function BusinessDashboardPage() {
         <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-6">
           <div className="rounded-2xl bg-[var(--brand-deep)] px-4 py-3.5 text-[var(--on-brand-deep)] sm:col-span-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--on-brand-deep)]/55">Available balance</p>
-            <p className="mt-1.5 text-2xl font-black tracking-[-0.03em]">{money(data.available_balance.available_balance, currency)}</p>
+            <p className="mt-1.5 text-2xl font-black tracking-[-0.03em]">{money(balance.available_balance, currency)}</p>
             <p className="mt-1 text-[11px] leading-4 text-[var(--on-brand-deep)]/52">What the business actually has right now — not tied to the date filter below.</p>
           </div>
           {[
-            ["Collected (lifetime)", data.available_balance.collected],
-            ["Expenses paid", -data.available_balance.expenses_paid],
-            ["Payroll paid", -data.available_balance.payroll_paid],
-            ...(data.business.is_installment ? [["Writer payments", -data.available_balance.writer_paid]] : []),
-            ["Owner withdrawals", -data.available_balance.owner_withdrawn],
+            ["Collected (lifetime)", balance.collected],
+            ["Expenses paid", -balance.expenses_paid],
+            ["Payroll paid", -balance.payroll_paid],
+            ...(data.business.is_installment ? [["Writer payments", -balance.writer_paid]] : []),
+            ["Owner withdrawals", -balance.owner_withdrawn],
           ].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{Number(value) < 0 ? "− " : ""}{money(Math.abs(Number(value)), currency)}</p></div>)}
         </section>
       ) : null}
