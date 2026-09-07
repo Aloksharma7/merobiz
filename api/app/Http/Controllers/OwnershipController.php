@@ -6,21 +6,17 @@ use App\Enums\BusinessRole;
 use App\Http\Requests\StoreOwnershipRequest;
 use App\Models\Business;
 use App\Models\OwnershipPeriod;
-use App\Services\AuditService;
+use App\Services\OwnershipService;
 use App\Support\AuthorizesBusinessActions;
-use App\Support\Decimal;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class OwnershipController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(private readonly OwnershipService $ownership) {}
 
     public function index(Request $request, Business $business): JsonResponse
     {
@@ -52,88 +48,18 @@ class OwnershipController extends Controller
         $actorMembership = $this->membership($request);
         abort_unless($actorMembership->full_control, 403, 'Only a full-control owner can change ownership stakes.');
         $data = $request->validated();
-
-        abort_unless($business->memberships()->where('user_id', $data['user_id'])->where('active', true)->exists(), 422, 'The selected partner must be an active business member.');
-
         $effectiveFrom = CarbonImmutable::parse($data['effective_from'])->startOfDay();
-        $lastClosedDate = $business->profitPeriods()->max('end_date');
-        if ($lastClosedDate && $effectiveFrom->lte(CarbonImmutable::parse($lastClosedDate))) {
-            throw ValidationException::withMessages([
-                'effective_from' => 'Ownership cannot be changed inside a closed profit period.',
-            ]);
-        }
 
-        $futureRecordExists = $business->ownerships()
-            ->where('user_id', $data['user_id'])
-            ->whereDate('effective_from', '>', $effectiveFrom->toDateString())
-            ->exists();
-        if ($futureRecordExists) {
-            throw ValidationException::withMessages([
-                'effective_from' => 'Remove or revise the later scheduled ownership record first.',
-            ]);
-        }
-
-        $otherOwnership = $business->ownerships()
-            ->where('user_id', '!=', $data['user_id'])
-            ->whereDate('effective_from', '<=', $effectiveFrom->toDateString())
-            ->where(function (Builder $query) use ($effectiveFrom): void {
-                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $effectiveFrom->toDateString());
-            })
-            ->sum('ownership_percent');
-
-        $otherProfitShare = $business->ownerships()
-            ->where('user_id', '!=', $data['user_id'])
-            ->whereDate('effective_from', '<=', $effectiveFrom->toDateString())
-            ->where(function (Builder $query) use ($effectiveFrom): void {
-                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $effectiveFrom->toDateString());
-            })
-            ->sum('profit_share_percent');
-
-        if (Decimal::of($otherOwnership)->plus(Decimal::of($data['ownership_percent']))->isGreaterThan(100)) {
-            throw ValidationException::withMessages(['ownership_percent' => 'Combined ownership cannot exceed 100%.']);
-        }
-        if (Decimal::of($otherProfitShare)->plus(Decimal::of($data['profit_share_percent']))->isGreaterThan(100)) {
-            throw ValidationException::withMessages(['profit_share_percent' => 'Combined profit sharing cannot exceed 100%.']);
-        }
-
-        $period = DB::transaction(function () use ($request, $business, $data, $effectiveFrom): OwnershipPeriod {
-            $current = $business->ownerships()
-                ->where('user_id', $data['user_id'])
-                ->whereDate('effective_from', '<=', $effectiveFrom->toDateString())
-                ->where(function (Builder $query) use ($effectiveFrom): void {
-                    $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $effectiveFrom->toDateString());
-                })
-                ->lockForUpdate()
-                ->first();
-
-            if ($current) {
-                if ($current->effective_from->isSameDay($effectiveFrom)) {
-                    $before = $current->toArray();
-                    $current->update([
-                        'ownership_percent' => $data['ownership_percent'],
-                        'profit_share_percent' => $data['profit_share_percent'],
-                        'notes' => $data['notes'] ?? $current->notes,
-                    ]);
-                    $this->audit->record($request->user(), $business, 'ownership.updated', $current, $before, $current->fresh()->toArray(), $request);
-
-                    return $current->fresh('user');
-                }
-
-                $current->update(['effective_to' => $effectiveFrom->subDay()->toDateString()]);
-            }
-
-            $created = $business->ownerships()->create([
-                'user_id' => $data['user_id'],
-                'ownership_percent' => $data['ownership_percent'],
-                'profit_share_percent' => $data['profit_share_percent'],
-                'effective_from' => $effectiveFrom->toDateString(),
-                'notes' => $data['notes'] ?? null,
-            ]);
-            $created->load('user');
-            $this->audit->record($request->user(), $business, 'ownership.changed', $created, null, $created->toArray(), $request);
-
-            return $created;
-        });
+        $period = $this->ownership->schedule(
+            $business,
+            (int) $data['user_id'],
+            (float) $data['ownership_percent'],
+            (float) $data['profit_share_percent'],
+            $effectiveFrom,
+            $data['notes'] ?? null,
+            $request->user(),
+            $request,
+        );
 
         return response()->json([
             'message' => 'Ownership record saved.',

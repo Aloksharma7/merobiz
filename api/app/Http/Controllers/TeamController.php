@@ -11,9 +11,11 @@ use App\Models\SalaryPayment;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\DashboardService;
+use App\Services\OwnershipService;
 use App\Services\SalaryService;
 use App\Support\AuthorizesBusinessActions;
 use App\Support\DateRange;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +30,7 @@ class TeamController extends Controller
     public function __construct(
         private readonly AuditService $audit,
         private readonly SalaryService $salary,
+        private readonly OwnershipService $ownership,
     ) {}
 
     public function index(Request $request, Business $business): JsonResponse
@@ -161,13 +164,18 @@ class TeamController extends Controller
             'pay_type' => ['sometimes', Rule::enum(PayType::class)],
             'salary_amount' => ['sometimes', 'numeric', 'min:0'],
             'salary_visible_to_staff' => ['sometimes', 'boolean'],
+            'ownership_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'profit_share_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
         ]);
+
+        $wantsProfitShare = array_key_exists('ownership_percent', $data) || array_key_exists('profit_share_percent', $data);
+        abort_if($wantsProfitShare && ! $actorMembership->full_control, 403, 'Only a full-control owner can set a profit share.');
 
         $role = BusinessRole::from($data['role']);
         abort_unless($role !== BusinessRole::Owner || $actorMembership->full_control, 403, 'Only a full-control owner can assign the owner role.');
         $fullControl = $role === BusinessRole::Owner && $actorMembership->full_control && ($data['full_control'] ?? false);
 
-        $membership = DB::transaction(function () use ($business, $data, $role, $fullControl): BusinessMembership {
+        $membership = DB::transaction(function () use ($request, $business, $data, $role, $fullControl, $wantsProfitShare): BusinessMembership {
             $user = User::query()->where('email', mb_strtolower($data['email']))->first();
 
             if (! $user) {
@@ -202,7 +210,7 @@ class TeamController extends Controller
                 }
             }
 
-            return $business->memberships()->create([
+            $membership = $business->memberships()->create([
                 'user_id' => $user->id,
                 'role' => $role,
                 'full_control' => $fullControl,
@@ -214,6 +222,21 @@ class TeamController extends Controller
                 'salary_amount' => $data['salary_amount'] ?? 0,
                 'salary_visible_to_staff' => $data['salary_visible_to_staff'] ?? false,
             ]);
+
+            if ($wantsProfitShare) {
+                $this->ownership->schedule(
+                    $business,
+                    $user->id,
+                    (float) ($data['ownership_percent'] ?? 0),
+                    (float) ($data['profit_share_percent'] ?? 0),
+                    CarbonImmutable::now()->startOfDay(),
+                    null,
+                    $request->user(),
+                    $request,
+                );
+            }
+
+            return $membership;
         });
 
         $membership->load('user');
@@ -250,7 +273,15 @@ class TeamController extends Controller
             'pay_type' => ['sometimes', Rule::enum(PayType::class)],
             'salary_amount' => ['sometimes', 'numeric', 'min:0'],
             'salary_visible_to_staff' => ['sometimes', 'boolean'],
+            'ownership_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'profit_share_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
         ]);
+
+        $wantsProfitShare = array_key_exists('ownership_percent', $data) || array_key_exists('profit_share_percent', $data);
+        abort_if($wantsProfitShare && ! $actorMembership->full_control, 403, 'Only a full-control owner can set a profit share.');
+        $ownershipPercent = (float) ($data['ownership_percent'] ?? 0);
+        $profitSharePercent = (float) ($data['profit_share_percent'] ?? 0);
+        unset($data['ownership_percent'], $data['profit_share_percent']);
 
         $isFounder = $membership->user_id === $business->owner_id;
         $actorIsFounder = $request->user()->id === $business->owner_id;
@@ -294,6 +325,19 @@ class TeamController extends Controller
         $before = $membership->toArray();
         $membership->update($data);
         $this->audit->record($request->user(), $business, 'team.member.updated', $membership, $before, $membership->fresh()->toArray(), $request);
+
+        if ($wantsProfitShare) {
+            $this->ownership->schedule(
+                $business,
+                $membership->user_id,
+                $ownershipPercent,
+                $profitSharePercent,
+                CarbonImmutable::now()->startOfDay(),
+                null,
+                $request->user(),
+                $request,
+            );
+        }
 
         return response()->json([
             'message' => 'Team member updated.',

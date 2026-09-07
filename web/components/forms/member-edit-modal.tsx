@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
-const blank = { role: "employee" as BusinessRole, full_control: false, title: "", commission_rate: "0", active: true, pay_type: "commission" as PayType, salary_amount: "0", salary_visible_to_staff: false };
+const blank = { role: "employee" as BusinessRole, full_control: false, title: "", commission_rate: "0", active: true, pay_type: "commission" as PayType, salary_amount: "0", salary_visible_to_staff: false, ownership_percent: "0", profit_share_percent: "0" };
 
 export function MemberEditModal({ businessId, actorRole, actorFullControl, actorIsFounder, member, open, onClose }: { businessId: string | number; actorRole: BusinessRole; actorFullControl: boolean; actorIsFounder: boolean; member: Member | null; open: boolean; onClose: () => void }) {
   const roles: BusinessRole[] = actorFullControl ? ["employee", "admin", "owner"] : actorRole === "owner" || actorRole === "admin" ? ["employee", "admin"] : ["employee"];
@@ -32,6 +32,8 @@ export function MemberEditModal({ businessId, actorRole, actorFullControl, actor
         pay_type: member.pay_type ?? "commission",
         salary_amount: String(member.salary_amount ?? 0),
         salary_visible_to_staff: member.salary_visible_to_staff ?? false,
+        ownership_percent: String(member.ownership_percent ?? 0),
+        profit_share_percent: String(member.profit_share_percent ?? 0),
       });
       setErrors({});
     }
@@ -40,8 +42,18 @@ export function MemberEditModal({ businessId, actorRole, actorFullControl, actor
   const mutation = useMutation({
     mutationFn: async () => {
       if (!member) return;
-      const { full_control, ...rest } = form;
-      return (await api.patch<ApiMessage<{ member: Member }>>(`/businesses/${businessId}/team/${member.id}`, { ...rest, commission_rate: Number(form.commission_rate || 0), salary_amount: Number(form.salary_amount || 0), ...(canEditControl ? { full_control } : {}) })).data;
+      const { full_control, ownership_percent, profit_share_percent, ...rest } = form;
+      // Only send these if they actually changed from the member's current schedule —
+      // otherwise every unrelated edit (e.g. just the job title) would create a fresh,
+      // identical dated ownership record.
+      const ownershipChanged = actorFullControl && (Number(ownership_percent || 0) !== member.ownership_percent || Number(profit_share_percent || 0) !== member.profit_share_percent);
+      return (await api.patch<ApiMessage<{ member: Member }>>(`/businesses/${businessId}/team/${member.id}`, {
+        ...rest,
+        commission_rate: Number(form.commission_rate || 0),
+        salary_amount: Number(form.salary_amount || 0),
+        ...(canEditControl ? { full_control } : {}),
+        ...(ownershipChanged ? { ownership_percent: Number(ownership_percent || 0), profit_share_percent: Number(profit_share_percent || 0) } : {}),
+      })).data;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["team", String(businessId)] });
@@ -80,6 +92,16 @@ export function MemberEditModal({ businessId, actorRole, actorFullControl, actor
           </>
         ) : null}
         <label className="flex items-center gap-2.5 self-end pb-2.5 text-sm font-semibold"><input type="checkbox" checked={form.active} disabled={lockedByFounderProtection} onChange={(event) => update("active", event.target.checked)} className="h-4 w-4 accent-[var(--brand)] disabled:opacity-40" />Active member</label>
+        {actorFullControl ? (
+          <div className="rounded-2xl border border-[var(--line)] p-4 sm:col-span-2">
+            <p className="text-sm font-bold">Profit share</p>
+            <p className="mt-0.5 text-xs leading-5 text-[var(--ink-soft)]">A cut of the business's overall net profit — separate from sales commission, and available to anyone on the team, not just owners. Leave at 0 if this person shouldn't get a share.</p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <FieldShell label="Ownership percentage" htmlFor="edit-ownership-percent" error={errors.ownership_percent?.[0]} hint="Equity record only — not used in the profit math"><Input id="edit-ownership-percent" type="number" min="0" max="100" step="0.0001" placeholder="0" value={form.ownership_percent} onChange={(event) => update("ownership_percent", event.target.value)} /></FieldShell>
+              <FieldShell label="Profit-share percentage" htmlFor="edit-profit-share-percent" error={errors.profit_share_percent?.[0]} hint="This is the % actually applied to net profit"><Input id="edit-profit-share-percent" type="number" min="0" max="100" step="0.0001" placeholder="0" value={form.profit_share_percent} onChange={(event) => update("profit_share_percent", event.target.value)} /></FieldShell>
+            </div>
+          </div>
+        ) : null}
         {form.role === "owner" ? (
           <label className="flex items-start gap-2.5 rounded-2xl border border-[var(--line)] p-4 text-sm font-semibold sm:col-span-2">
             <input type="checkbox" checked={editingFounder ? true : form.full_control} disabled={!canEditControl} onChange={(event) => update("full_control", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)] disabled:opacity-40" />

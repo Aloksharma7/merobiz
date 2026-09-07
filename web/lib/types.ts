@@ -415,6 +415,7 @@ export type Expense = {
   tax_amount: number;
   payment_method: PaymentMethod;
   status: ExpenseStatus;
+  affects_profit: boolean;
   reference?: string | null;
   notes?: string | null;
   submitter?: { id: number; name: string };

@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const blank = { name: "", email: "", phone: "", password: "", role: "employee" as BusinessRole, full_control: false, title: "", commission_rate: "0", pay_type: "commission" as PayType, salary_amount: "0", salary_visible_to_staff: false };
+const blank = { name: "", email: "", phone: "", password: "", role: "employee" as BusinessRole, full_control: false, title: "", commission_rate: "0", pay_type: "commission" as PayType, salary_amount: "0", salary_visible_to_staff: false, wants_profit_share: false, ownership_percent: "0", profit_share_percent: "0" };
 export function MemberFormModal({ businessId, actorRole, actorFullControl, open, onClose }: { businessId: string | number; actorRole: BusinessRole; actorFullControl: boolean; open: boolean; onClose: () => void }) {
   const roles: BusinessRole[] = actorFullControl ? ["employee", "admin", "owner"] : actorRole === "owner" || actorRole === "admin" ? ["employee", "admin"] : ["employee"];
   const [form, setForm] = useState(blank);
@@ -19,7 +19,16 @@ export function MemberFormModal({ businessId, actorRole, actorFullControl, open,
   useEffect(() => { if (open) { setForm(blank); setErrors({}); } }, [open]);
 
   const mutation = useMutation({
-    mutationFn: async () => (await api.post<ApiMessage<{ member: Member }>>(`/businesses/${businessId}/team`, { ...form, commission_rate: Number(form.commission_rate || 0), salary_amount: Number(form.salary_amount || 0), full_control: form.role === "owner" ? form.full_control : undefined })).data,
+    mutationFn: async () => {
+      const { wants_profit_share, ownership_percent, profit_share_percent, ...rest } = form;
+      return (await api.post<ApiMessage<{ member: Member }>>(`/businesses/${businessId}/team`, {
+        ...rest,
+        commission_rate: Number(form.commission_rate || 0),
+        salary_amount: Number(form.salary_amount || 0),
+        full_control: form.role === "owner" ? form.full_control : undefined,
+        ...(wants_profit_share ? { ownership_percent: Number(ownership_percent || 0), profit_share_percent: Number(profit_share_percent || 0) } : {}),
+      })).data;
+    },
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["team", String(businessId)] }); toast.success("Team member added", { description: "Their access follows the selected role." }); onClose(); },
     onError: (error) => { setErrors(fieldErrors(error)); toast.error("Could not add team member", { description: apiError(error) }); },
   });
@@ -51,6 +60,23 @@ export function MemberFormModal({ businessId, actorRole, actorFullControl, open,
               <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Without this, this co-owner has the same access as an admin — they can't change ownership stakes, grant the owner role, or edit the founder.</span>
             </span>
           </label>
+        ) : null}
+        {actorFullControl ? (
+          <div className="rounded-2xl border border-[var(--line)] p-4 sm:col-span-2">
+            <label className="flex items-start gap-2.5 text-sm font-semibold">
+              <input type="checkbox" checked={form.wants_profit_share} onChange={(event) => update("wants_profit_share", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+              <span>
+                <span className="block">Also give this person a share of overall profit</span>
+                <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Separate from sales commission — a cut of the business's total net profit, the same way an owner's share works.</span>
+              </span>
+            </label>
+            {form.wants_profit_share ? (
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <FieldShell label="Ownership percentage" htmlFor="member-ownership-percent" error={errors.ownership_percent?.[0]} hint="Equity record only — not used in the profit math"><Input id="member-ownership-percent" type="number" min="0" max="100" step="0.0001" placeholder="0" value={form.ownership_percent} onChange={(event) => update("ownership_percent", event.target.value)} /></FieldShell>
+                <FieldShell label="Profit-share percentage" htmlFor="member-profit-share-percent" error={errors.profit_share_percent?.[0]} hint="This is the % actually applied to net profit"><Input id="member-profit-share-percent" type="number" min="0" max="100" step="0.0001" placeholder="0" value={form.profit_share_percent} onChange={(event) => update("profit_share_percent", event.target.value)} /></FieldShell>
+              </div>
+            ) : null}
+          </div>
         ) : null}
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4 text-xs leading-5 text-[var(--ink-soft)] sm:col-span-2"><span className="font-bold text-[var(--ink)]">Simple rule:</span> employees see only the business they are assigned to and their own sales workflow; admins manage that business.</div>
       </form>

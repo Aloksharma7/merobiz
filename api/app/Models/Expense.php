@@ -15,7 +15,7 @@ class Expense extends Model
     protected $fillable = [
         'business_id', 'submitted_by', 'approved_by', 'category', 'vendor',
         'expense_date', 'amount', 'tax_amount', 'payment_method', 'status',
-        'reference', 'notes', 'approved_at',
+        'reference', 'notes', 'approved_at', 'affects_profit',
     ];
 
     protected function casts(): array
@@ -26,6 +26,7 @@ class Expense extends Model
             'amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
             'approved_at' => 'datetime',
+            'affects_profit' => 'boolean',
         ];
     }
 

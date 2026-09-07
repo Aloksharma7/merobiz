@@ -20,6 +20,7 @@ class ExpenseResource extends JsonResource
             'tax_amount' => (float) $this->tax_amount,
             'payment_method' => $this->payment_method,
             'status' => $this->status->value,
+            'affects_profit' => (bool) $this->affects_profit,
             'reference' => $this->reference,
             'notes' => $this->notes,
             'submitter' => $this->whenLoaded('submitter', fn () => $this->submitter ? [

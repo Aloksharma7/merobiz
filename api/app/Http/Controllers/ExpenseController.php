@@ -107,6 +107,7 @@ class ExpenseController extends Controller
             'status' => ExpenseStatus::Approved,
             'approved_by' => $request->user()->id,
             'approved_at' => now(),
+            'affects_profit' => $data['affects_profit'] ?? true,
         ]);
 
         $this->audit->record($request->user(), $business, 'expense.created', $expense, null, $expense->toArray(), $request);

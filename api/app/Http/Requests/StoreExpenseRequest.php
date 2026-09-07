@@ -25,6 +25,7 @@ class StoreExpenseRequest extends FormRequest
             'payment_method' => ['required', Rule::enum(PaymentMethod::class)],
             'reference' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'affects_profit' => ['sometimes', 'boolean'],
         ];
     }
 }

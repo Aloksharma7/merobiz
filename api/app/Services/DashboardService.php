@@ -316,8 +316,13 @@ class DashboardService
             $payments->whereHas('invoice', fn (Builder $query) => $query->where('created_by', $creator->id));
         }
 
+        // affects_profit=false means this expense is cash catching up to a cost
+        // already recognized as COGS on an invoice item — it still reduces available
+        // balance (see availableBalance() below, which does not filter on this flag)
+        // but must not deduct from profit a second time here.
         $expenses = $creator ? 0.0 : (float) $business->expenses()
             ->where('status', 'approved')
+            ->where('affects_profit', true)
             ->whereBetween('expense_date', [$start->toDateString(), $end->toDateString()])
             ->sum('amount');
 
@@ -595,7 +600,7 @@ class DashboardService
     }
 
     /**
-     * @param Collection<int, BusinessMembership> $memberships
+     * @param  Collection<int, BusinessMembership>  $memberships
      * @return array<int, array<string, mixed>>
      */
     private function portfolioTrend(User $user, Collection $memberships, CarbonInterface $anchor): array
@@ -658,7 +663,7 @@ class DashboardService
     }
 
     /**
-     * @param array<int, int> $businessIds
+     * @param  array<int, int>  $businessIds
      * @return array<int, array<string, mixed>>
      */
     private function topSellers(array $businessIds, CarbonInterface $start, CarbonInterface $end, ?int $onlyUserId = null): array
@@ -771,7 +776,7 @@ class DashboardService
     }
 
     /**
-     * @param array<int, int> $businessIds
+     * @param  array<int, int>  $businessIds
      * @return array<int, array<string, mixed>>
      */
     private function recentActivity(array $businessIds): array

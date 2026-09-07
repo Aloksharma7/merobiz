@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const blank = { category: "", vendor: "", expense_date: today(), amount: "", tax_amount: "0", payment_method: "cash" as PaymentMethod, reference: "", notes: "" };
+const blank = { category: "", vendor: "", expense_date: today(), amount: "", tax_amount: "0", payment_method: "cash" as PaymentMethod, reference: "", notes: "", already_in_sale_price: false };
 
 export function ExpenseFormModal({ businessId, open, onClose }: { businessId: string | number; open: boolean; onClose: () => void }) {
   const [form, setForm] = useState(blank);
@@ -20,14 +20,18 @@ export function ExpenseFormModal({ businessId, open, onClose }: { businessId: st
   useEffect(() => { if (open) { setForm({ ...blank, expense_date: today() }); setErrors({}); } }, [open]);
 
   const mutation = useMutation({
-    mutationFn: async () => (await api.post<ApiMessage<{ expense: Expense }>>(`/businesses/${businessId}/expenses`, {
-      ...form,
-      vendor: form.vendor || null,
-      amount: Number(form.amount),
-      tax_amount: Number(form.tax_amount || 0),
-      reference: form.reference || null,
-      notes: form.notes || null,
-    })).data,
+    mutationFn: async () => {
+      const { already_in_sale_price, ...rest } = form;
+      return (await api.post<ApiMessage<{ expense: Expense }>>(`/businesses/${businessId}/expenses`, {
+        ...rest,
+        vendor: form.vendor || null,
+        amount: Number(form.amount),
+        tax_amount: Number(form.tax_amount || 0),
+        reference: form.reference || null,
+        notes: form.notes || null,
+        affects_profit: !already_in_sale_price,
+      })).data;
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["expenses", String(businessId)] }),
@@ -52,6 +56,13 @@ export function ExpenseFormModal({ businessId, open, onClose }: { businessId: st
         <FieldShell label="Payment method" htmlFor="expense-method" error={errors.payment_method?.[0]} required><Select id="expense-method" value={form.payment_method} onChange={(event) => update("payment_method", event.target.value as PaymentMethod)}><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="qr">QR payment</option><option value="card">Card</option><option value="wallet">Digital wallet</option><option value="cheque">Cheque</option><option value="other">Other</option></Select></FieldShell>
         <FieldShell label="Reference" htmlFor="expense-reference" error={errors.reference?.[0]} hint="Optional"><Input id="expense-reference" value={form.reference} onChange={(event) => update("reference", event.target.value)} placeholder="Invoice or receipt number" /></FieldShell>
         <FieldShell label="Notes" htmlFor="expense-notes" error={errors.notes?.[0]} className="sm:col-span-2"><Textarea id="expense-notes" value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Any extra detail worth keeping" /></FieldShell>
+        <label className="flex items-start gap-2.5 rounded-2xl border border-[var(--line)] p-4 text-sm font-semibold sm:col-span-2">
+          <input type="checkbox" checked={form.already_in_sale_price} onChange={(event) => update("already_in_sale_price", event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />
+          <span>
+            <span className="block">This cost is already priced into a sale</span>
+            <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--ink-soft)]">Check this if you already set a cost on the invoice item for this (so profit already accounts for it). It'll still reduce your available balance, just not profit a second time.</span>
+          </span>
+        </label>
       </form>
     </Modal>
   );
