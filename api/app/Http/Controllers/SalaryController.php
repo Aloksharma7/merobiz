@@ -10,6 +10,7 @@ use App\Services\SalaryService;
 use App\Support\AuthorizesBusinessActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class SalaryController extends Controller
 {
@@ -23,9 +24,30 @@ class SalaryController extends Controller
         abort_unless($membership->business_id === $business->id, 404);
 
         return response()->json([
-            'summary' => $this->salary->summaryFor($membership),
+            'summary' => $this->safeSummary($membership),
             'payments' => $this->mapPayments($membership),
         ]);
+    }
+
+    /**
+     * Display-only summary: never let a bad calculation take the page down —
+     * log it and fall back to a safe default. pay()/writeOffLoan() below must
+     * NOT use this — they need the real, accurate summary to validate amounts.
+     *
+     * @return array<string, mixed>
+     */
+    private function safeSummary(BusinessMembership $membership): array
+    {
+        try {
+            return $this->salary->summaryFor($membership);
+        } catch (\Throwable $exception) {
+            Log::error('Failed to compute salary summary', [
+                'membership_id' => $membership->id,
+                'exception' => $exception->getMessage(),
+            ]);
+
+            return ['pay_type' => $membership->pay_type->value, 'salary_amount' => 0.0, 'salary_visible_to_staff' => $membership->salary_visible_to_staff, 'paid_total' => 0.0, 'pending' => 0.0, 'outstanding_loan' => 0.0];
+        }
     }
 
     public function pay(StoreSalaryPaymentRequest $request, Business $business, BusinessMembership $membership): JsonResponse
@@ -57,7 +79,7 @@ class SalaryController extends Controller
     public function mine(Request $request, Business $business): JsonResponse
     {
         $membership = $this->membership($request);
-        $summary = $this->salary->summaryFor($membership);
+        $summary = $this->safeSummary($membership);
 
         if (! $membership->salary_visible_to_staff) {
             // The visibility toggle is about hiding pay-rate detail, not about

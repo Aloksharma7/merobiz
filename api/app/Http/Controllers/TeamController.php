@@ -19,6 +19,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -83,7 +84,31 @@ class TeamController extends Controller
     private function mapMemberRow(Business $business, BusinessMembership $membership, DateRange $range, ?object $row): array
     {
         $ownership = $business->currentOwnershipFor($membership->user, $range->end);
-        $salary = $this->salary->summaryFor($membership);
+
+        // Defensive: a bad profit-share calculation for one member (or one business
+        // in an unexpected state) must never take down the whole team list — log it
+        // and fall back to a safe default instead of a 500.
+        try {
+            $salary = $this->salary->summaryFor($membership);
+        } catch (\Throwable $exception) {
+            Log::error('Failed to compute salary summary for team member', [
+                'membership_id' => $membership->id,
+                'business_id' => $business->id,
+                'exception' => $exception->getMessage(),
+            ]);
+            $salary = ['pay_type' => $membership->pay_type->value, 'salary_amount' => 0.0, 'salary_visible_to_staff' => false, 'paid_total' => 0.0, 'pending' => 0.0, 'outstanding_loan' => 0.0];
+        }
+
+        try {
+            $profitEarned = $this->dashboard->attributableProfit($membership->user, $business, $range->start, $range->end);
+        } catch (\Throwable $exception) {
+            Log::error('Failed to compute attributable profit for team member', [
+                'membership_id' => $membership->id,
+                'business_id' => $business->id,
+                'exception' => $exception->getMessage(),
+            ]);
+            $profitEarned = 0.0;
+        }
 
         return [
             'id' => $membership->id,
@@ -105,7 +130,7 @@ class TeamController extends Controller
             'commission_earned' => round((float) ($row->commission ?? 0), 2),
             'ownership_percent' => $ownership ? (float) $ownership->ownership_percent : 0.0,
             'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
-            'profit_earned' => $this->dashboard->attributableProfit($membership->user, $business, $range->start, $range->end),
+            'profit_earned' => $profitEarned,
             'pay_type' => $salary['pay_type'],
             'salary_amount' => $salary['salary_amount'],
             'salary_visible_to_staff' => $salary['salary_visible_to_staff'],
