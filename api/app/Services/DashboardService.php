@@ -64,7 +64,7 @@ class DashboardService
             }
             $ownership = $canViewFinancials ? $business->currentOwnershipFor($user, $range->end) : null;
             $attributable = $canViewFinancials
-                ? $this->attributableProfit($user, $business, $range->start, $range->end)
+                ? $this->attributableProfit($user, $business, $range->start, $range->end, netWithdrawals: true)
                 : 0.0;
             $availableBalance = $canViewFinancials ? $this->availableBalance($business) : $this->emptyAvailableBalance();
             $totalAvailableBalance += $availableBalance['available_balance'];
@@ -169,7 +169,7 @@ class DashboardService
             $sales += $metrics['net_sales'];
 
             if ($mode === 'owner') {
-                $profit += $canViewFinancials ? $this->attributableProfit($user, $business, $start, $end) : 0.0;
+                $profit += $canViewFinancials ? $this->attributableProfit($user, $business, $start, $end, netWithdrawals: true) : 0.0;
             } elseif ($canViewFinancials) {
                 $profit += $metrics['net_profit'];
             }
@@ -214,7 +214,7 @@ class DashboardService
         // Always computed, even for someone without dashboard.financial — this is only
         // ever their OWN profit-share cut, never the business's overall figures, so it's
         // as safe to show as their own sales commission used to be.
-        $attributable = $this->attributableProfit($user, $business, $range->start, $range->end);
+        $attributable = $this->attributableProfit($user, $business, $range->start, $range->end, netWithdrawals: true);
         // Lifetime (not date-range scoped), same reasoning as available_balance below —
         // "how much of what I've ever earned have I already taken out" doesn't make
         // sense measured against just the selected period.
@@ -514,11 +514,20 @@ class DashboardService
      * moment they're paid, turning an exact, correct payment into an apparent
      * overpayment. Excluding payroll here breaks that circular dependency by
      * measuring the pool before anyone's payout is subtracted from it — the same
-     * way a real profit-sharing pool is decided before it's paid out of. The
-     * dashboard's own attributable profit (the true bottom-line figure) always
-     * calls this with the default false, so it still reflects every real cost.
+     * way a real profit-sharing pool is decided before it's paid out of.
+     *
+     * $netWithdrawals subtracts this same user's own profit withdrawals recorded
+     * within [$start, $end] — used by the dashboard so "expected profit" reflects
+     * money already taken out within the selected period, not just what was
+     * earned. It's deliberately scoped to the same date range as the profit
+     * figure itself (not lifetime) so switching periods doesn't pull an unrelated
+     * period's withdrawal into this one — lifetime_profit_earned/
+     * lifetime_profit_withdrawn/profit_available_to_withdraw (see business())
+     * cover the lifetime view. Left false for lifetimeProfitShareEarned() — a
+     * profit-share employee's payroll is paid via SalaryPayment, not
+     * ProfitWithdrawal, so the two must not cross-contaminate.
      */
-    public function attributableProfit(User $user, Business $business, CarbonInterface $start, CarbonInterface $end, bool $excludePayroll = false): float
+    public function attributableProfit(User $user, Business $business, CarbonInterface $start, CarbonInterface $end, bool $excludePayroll = false, bool $netWithdrawals = false): float
     {
         $periods = OwnershipPeriod::query()
             ->where('business_id', $business->id)
@@ -544,6 +553,14 @@ class DashboardService
             $metrics = $this->metrics($business, $segmentStart, $segmentEnd);
             $baseProfit = $excludePayroll ? $metrics['net_profit'] + $metrics['payroll_cost'] : $metrics['net_profit'];
             $total += $baseProfit * ((float) $period->profit_share_percent / 100);
+        }
+
+        if ($netWithdrawals) {
+            $total -= (float) ProfitWithdrawal::query()
+                ->where('business_id', $business->id)
+                ->where('user_id', $user->id)
+                ->whereBetween('withdrawn_on', [$start->toDateString(), $end->toDateString()])
+                ->sum('amount');
         }
 
         return round($total, 2);
@@ -667,7 +684,7 @@ class DashboardService
                     $netProfit += $metrics['net_profit'];
                 }
                 if ($canViewFinancials) {
-                    $attributable += $this->attributableProfit($user, $business, $monthStart, $monthEnd);
+                    $attributable += $this->attributableProfit($user, $business, $monthStart, $monthEnd, netWithdrawals: true);
                 }
             }
 

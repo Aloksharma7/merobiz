@@ -16,7 +16,7 @@ class ProfitAvailableToWithdrawTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_withdrawing_exactly_what_you_earned_zeroes_out_what_remains_but_not_lifetime_earned(): void
+    public function test_withdrawing_exactly_what_you_earned_this_period_zeroes_out_expected_profit_but_not_lifetime_earned(): void
     {
         $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-patw@example.test', 'password' => 'password']);
         $business = Business::query()->create([
@@ -61,8 +61,11 @@ class ProfitAvailableToWithdrawTest extends TestCase
         ])->assertCreated();
 
         $after = $this->getJson("/api/businesses/{$business->id}/dashboard?{$range}")->assertOk()->json();
-        // Earned profit is unchanged — you still earned it, taking it out doesn't erase that.
-        $this->assertEquals(400.0, $after['summary']['attributable_profit']);
+        // Expected profit nets against withdrawals made within this same period —
+        // you earned 400 and took out 400 of it within this period, so there's
+        // nothing left showing as "expected" for this period anymore.
+        $this->assertEquals(0.0, $after['summary']['attributable_profit']);
+        // Lifetime earned is a separate, unaffected figure — you still earned it.
         $this->assertEquals(400.0, $after['summary']['lifetime_profit_earned']);
         // But now it's clear you've already taken all of it, nothing left to withdraw.
         $this->assertEquals(400.0, $after['summary']['lifetime_profit_withdrawn']);
