@@ -115,6 +115,23 @@ export default function BusinessDashboardPage() {
         </section>
       ) : null}
 
+      {financial ? (
+        <section className="rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)]">
+          <p className="px-1 pb-2.5 text-xs font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Why available balance differs from profit</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {([
+              ["Collected", balance.collected, "Every payment ever received, lifetime"],
+              ["Refunded", balance.refunded, "Money physically handed back"],
+              ["Expenses paid", balance.expenses_paid, "Every approved expense — including ones that don't touch profit"],
+              ["Payroll paid", balance.payroll_paid, "Salary, advances and loans actually paid out"],
+              ...(data.business.is_installment ? ([["Writer payments", balance.writer_paid, "Paid to writers for delivered work"]] as Array<[string, number, string]>) : []),
+              ["Owner withdrawals", balance.owner_withdrawn, "Profit an owner has taken out"],
+              ["Available balance", balance.available_balance, "Collected minus everything above — what's actually left right now"],
+            ] as Array<[string, number, string]>).map(([label, value, note]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(Number(value), currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">{String(note)}</p></div>)}
+          </div>
+        </section>
+      ) : null}
+
       {layout.show_quick_actions && quickActions.length ? (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {quickActions.map(({ icon: Icon, ...action }) => <Link href={action.href} key={action.label} className="group flex min-h-24 items-center gap-4 rounded-[var(--radius)] border border-[var(--line)] bg-white p-4 shadow-[var(--shadow-sm)] transition hover:border-[#b3c3b6] hover:shadow-[0_12px_30px_rgb(17_48_35/0.07)]"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)]"><Icon size={20} /></span><span className="min-w-0 flex-1"><span className="block font-bold">{action.label}</span><span className="mt-0.5 block truncate text-xs text-[var(--ink-soft)]">{action.description}</span></span><ArrowRight size={17} className="text-[var(--ink-soft)] transition group-hover:translate-x-1 group-hover:text-[var(--brand)]" /></Link>)}
