@@ -35,28 +35,53 @@ jobs:
           cp -r public serverupload/public
           cp .env.production serverupload/.env
 
+      - name: Hash current dependencies
+        id: deps
+        working-directory: web
+        run: echo "hash=$(sha256sum package-lock.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
-      # Only ever touches .next/, public/, server.js, package.json, .env.
-      # Deliberately never touches node_modules/ — dependencies are already
-      # installed on the server (via cPanel's own npm install) and are left
-      # alone here. If you add/update a package in web/package.json, run
-      # npm install on the server once yourself after that deploy.
-      # Also never touches .htaccess, cgi-bin, .well-known, stderr.log, tmp,
-      # or anything else already sitting in that folder.
-      - name: Upload only the files this app owns
-        working-directory: web/serverupload
+      - name: Prepare known_hosts
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Check dependency hash already on the server
+        id: remote_deps
+        run: |
+          HASH=$(ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cat ~/business.techchamp.com.np/.deps-hash 2>/dev/null || echo none")
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      # Only ever touches .next/, public/, server.js, package.json, .env, and
+      # (only when dependencies actually changed) node_modules/ + .deps-hash.
+      # Never touches .htaccess, cgi-bin, .well-known, stderr.log, tmp, or
+      # anything else already sitting in that folder.
+      - name: Upload app files
+        working-directory: web/serverupload
+        run: |
           REMOTE="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:business.techchamp.com.np"
           RSYNC_SSH="ssh -p ${{ secrets.SSH_PORT }}"
           rsync -avz --delete -e "$RSYNC_SSH" .next/ "$REMOTE/.next/"
           rsync -avz --delete -e "$RSYNC_SSH" public/ "$REMOTE/public/"
           rsync -avz -e "$RSYNC_SSH" server.js package.json .env "$REMOTE/"
+
+      # web/package-lock.json changed since the last deploy that touched the
+      # server — sync the pruned runtime node_modules this build produced,
+      # then record the new hash so the next deploy can skip this again.
+      - name: Sync node_modules only if dependencies changed
+        if: steps.deps.outputs.hash != steps.remote_deps.outputs.hash
+        working-directory: web/serverupload
+        run: |
+          REMOTE="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:business.techchamp.com.np"
+          RSYNC_SSH="ssh -p ${{ secrets.SSH_PORT }}"
+          rsync -avz --delete -e "$RSYNC_SSH" node_modules/ "$REMOTE/node_modules/"
+          echo "${{ steps.deps.outputs.hash }}" | ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cat > ~/business.techchamp.com.np/.deps-hash"
 
       - name: Tell Passenger to restart the app (no node/npm command runs)
         run: |
