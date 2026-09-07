@@ -106,7 +106,7 @@ export default function BusinessDashboardPage() {
       {financial && layout.show_profit_breakdown ? (
         <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-4">
           {([
-            ["Expected gross profit", data.summary.gross_profit, "Sales minus direct cost, only for what's actually been collected"],
+            ["Expected gross profit", data.summary.gross_profit, "Sales minus direct cost"],
             ["Approved expenses", data.summary.expenses, "Business costs"],
             ["Payroll paid", data.summary.payroll_cost, "Actual salary, commission and advance payouts"],
             ...(data.business.is_installment ? [["Writer payments", data.summary.writer_cost, "Paid to writers for delivered work"]] : []),

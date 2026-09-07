@@ -6,9 +6,6 @@ use App\Enums\BusinessRole;
 use App\Models\Business;
 use App\Models\User;
 use App\Services\DashboardService;
-use App\Services\InvoiceService;
-use App\Services\PaymentService;
-use App\Services\ProfitClosingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -99,13 +96,9 @@ class SalaryAdvanceAndPayrollTest extends TestCase
             'name' => 'Service', 'type' => 'service', 'unit' => 'session', 'sale_price' => 1000, 'cost_price' => 0, 'tax_rate' => 0, 'active' => true,
         ]);
 
-        $invoice = app(InvoiceService::class)->create($business, $commissioned, [
+        app(\App\Services\InvoiceService::class)->create($business, $commissioned, [
             'customer_name' => 'Walk-in', 'invoice_date' => today()->toDateString(), 'status' => 'issued', 'discount_amount' => 0,
             'items' => [['product_id' => $product->id, 'description' => 'Service', 'quantity' => 1, 'unit_price' => 1000, 'discount_amount' => 0, 'tax_rate' => 0]],
-        ]);
-        // Profit only counts once collected, so pay this invoice in full.
-        app(PaymentService::class)->record($business, $invoice, $owner, [
-            'payment_date' => today()->toDateString(), 'amount' => 1000, 'method' => 'bank_transfer',
         ]);
 
         $dashboard = app(DashboardService::class);
@@ -178,13 +171,9 @@ class SalaryAdvanceAndPayrollTest extends TestCase
             'name' => 'Service', 'type' => 'service', 'unit' => 'session', 'sale_price' => 1000, 'cost_price' => 0, 'tax_rate' => 0, 'active' => true,
         ]);
 
-        $invoice = app(InvoiceService::class)->create($business, $employee, [
+        app(\App\Services\InvoiceService::class)->create($business, $employee, [
             'customer_name' => 'Walk-in', 'invoice_date' => today()->toDateString(), 'status' => 'issued', 'discount_amount' => 0,
             'items' => [['product_id' => $product->id, 'description' => 'Service', 'quantity' => 1, 'unit_price' => 1000, 'discount_amount' => 0, 'tax_rate' => 0]],
-        ]);
-        // Profit only counts once collected, so pay this invoice in full.
-        app(PaymentService::class)->record($business, $invoice, $owner, [
-            'payment_date' => today()->toDateString(), 'amount' => 1000, 'method' => 'bank_transfer',
         ]);
 
         Sanctum::actingAs($owner);
@@ -192,7 +181,7 @@ class SalaryAdvanceAndPayrollTest extends TestCase
             'payment_date' => today()->toDateString(), 'amount' => 60, 'method' => 'cash',
         ])->assertCreated();
 
-        $period = app(ProfitClosingService::class)->close($business, $owner, [
+        $period = app(\App\Services\ProfitClosingService::class)->close($business, $owner, [
             'start_date' => today()->startOfMonth()->toDateString(),
             'end_date' => today()->endOfMonth()->toDateString(),
         ]);
