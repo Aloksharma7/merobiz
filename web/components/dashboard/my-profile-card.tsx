@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn, money } from "@/lib/utils";
 import { Wallet2 } from "lucide-react";
 
 export function MyProfileCard({
@@ -10,6 +10,8 @@ export function MyProfileCard({
   roleLabel,
   ownershipPercent,
   profitSharePercent,
+  availableToWithdraw,
+  currency,
   onLogProfit,
   className,
 }: {
@@ -19,6 +21,8 @@ export function MyProfileCard({
   roleLabel: string;
   ownershipPercent?: number | null;
   profitSharePercent?: number | null;
+  availableToWithdraw?: number | null;
+  currency?: string;
   onLogProfit?: () => void;
   className?: string;
 }) {
@@ -43,6 +47,13 @@ export function MyProfileCard({
             <p className="text-[9px] font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Profit share</p>
             <p className="mt-0.5 text-sm font-black">{profitSharePercent}%</p>
           </div>
+        </div>
+      ) : null}
+      {availableToWithdraw !== undefined && availableToWithdraw !== null && currency ? (
+        <div className="mt-3 rounded-xl bg-[var(--surface-soft)] px-3 py-2.5">
+          <p className="text-[9px] font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Still available to withdraw</p>
+          <p className="mt-0.5 text-sm font-black">{money(availableToWithdraw, currency)}</p>
+          <p className="mt-0.5 text-[10px] leading-4 text-[var(--ink-soft)]">What you've earned lifetime, minus what you've already taken out</p>
         </div>
       ) : null}
       {onLogProfit ? <Button size="sm" variant="secondary" leftIcon={<Wallet2 size={14} />} className="mt-3 w-full" onClick={onLogProfit}>Log profit taken</Button> : null}

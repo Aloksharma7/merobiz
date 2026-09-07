@@ -81,6 +81,8 @@ export default function BusinessDashboardPage() {
           roleLabel={`${humanize(data.business.my_role)} · ${business.name}`}
           ownershipPercent={owner ? data.business.ownership_percent : null}
           profitSharePercent={owner ? data.business.profit_share_percent : null}
+          availableToWithdraw={owner ? data.summary.profit_available_to_withdraw : null}
+          currency={currency}
           onLogProfit={owner ? () => setWithdrawalOpen(true) : undefined}
         />
         <MetricCard emphasis={!owner} label={financial ? "This month's expected profit" : "This month's sales"} value={financial ? data.month_to_date.profit : data.month_to_date.sales} currency={currency} icon={CalendarClock} hint="Month to date" />

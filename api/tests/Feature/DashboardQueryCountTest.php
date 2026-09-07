@@ -7,6 +7,7 @@ use App\Enums\InvoiceStatus;
 use App\Models\Business;
 use App\Models\User;
 use App\Services\DashboardService;
+use App\Services\InvoiceService;
 use App\Support\DateRange;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -35,7 +36,7 @@ class DashboardQueryCountTest extends TestCase
         ]);
 
         for ($i = 0; $i < 5; $i++) {
-            app(\App\Services\InvoiceService::class)->create($business, $owner, [
+            app(InvoiceService::class)->create($business, $owner, [
                 'customer_name' => 'Client '.$i,
                 'invoice_date' => today()->toDateString(),
                 'status' => InvoiceStatus::Issued->value,
@@ -56,7 +57,10 @@ class DashboardQueryCountTest extends TestCase
         // a single dashboard load ran 112 queries (each metrics() call alone issued
         // 8 separate SUM/COUNT round trips, called ~10 times per load for the
         // current period, prior period, month-to-date, and the 6-point trend).
-        // This guards against that regressing back in.
-        $this->assertLessThan(60, $queryCount, "Dashboard load issued {$queryCount} queries — investigate before allowing this to grow further.");
+        // This guards against that regressing back in. The budget was raised from
+        // 60 to 70 for the one-time addition of a lifetime attributableProfit()
+        // call (profit_available_to_withdraw) — a single extra calculation, not a
+        // loop-based regression like the one this test exists to catch.
+        $this->assertLessThan(70, $queryCount, "Dashboard load issued {$queryCount} queries — investigate before allowing this to grow further.");
     }
 }

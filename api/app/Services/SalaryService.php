@@ -77,7 +77,11 @@ class SalaryService
         $start = CarbonImmutable::parse($membership->business->created_at)->startOfDay();
         $end = CarbonImmutable::now();
 
-        return (string) $this->dashboard->attributableProfit($membership->user, $membership->business, $start, $end);
+        // excludePayroll=true — see attributableProfit()'s doc comment. Without
+        // this, paying someone their profit share reduces net_profit, which
+        // reduces their own accrued entitlement the moment they're paid, making
+        // a correct payment look like an overpayment immediately afterward.
+        return (string) $this->dashboard->attributableProfit($membership->user, $membership->business, $start, $end, excludePayroll: true);
     }
 
     /** @param array<string, mixed> $data */

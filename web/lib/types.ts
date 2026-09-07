@@ -549,6 +549,9 @@ export type MetricSummary = {
   invoice_count: number;
   average_invoice: number;
   attributable_profit?: number;
+  lifetime_profit_earned?: number;
+  lifetime_profit_withdrawn?: number;
+  profit_available_to_withdraw?: number;
   distributed_profit?: number;
   outstanding_profit?: number;
   net_sales_change?: number;

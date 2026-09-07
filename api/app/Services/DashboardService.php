@@ -189,6 +189,14 @@ class DashboardService
             ->sum('amount');
     }
 
+    private function lifetimeWithdrawn(int $userId, int $businessId): float
+    {
+        return (float) ProfitWithdrawal::query()
+            ->where('user_id', $userId)
+            ->where('business_id', $businessId)
+            ->sum('amount');
+    }
+
     /** @return array<string, mixed> */
     public function business(Business $business, User $user, BusinessMembership $membership, DateRange $range): array
     {
@@ -207,6 +215,11 @@ class DashboardService
         // ever their OWN profit-share cut, never the business's overall figures, so it's
         // as safe to show as their own sales commission used to be.
         $attributable = $this->attributableProfit($user, $business, $range->start, $range->end);
+        // Lifetime (not date-range scoped), same reasoning as available_balance below —
+        // "how much of what I've ever earned have I already taken out" doesn't make
+        // sense measured against just the selected period.
+        $lifetimeEarned = $this->attributableProfit($user, $business, CarbonImmutable::parse($business->created_at), CarbonImmutable::now());
+        $lifetimeWithdrawn = $this->lifetimeWithdrawn($user->id, $business->id);
 
         $today = CarbonImmutable::now();
         $monthMetrics = $this->metrics($business, $today->startOfMonth(), $today, $creator);
@@ -252,6 +265,9 @@ class DashboardService
             ],
             'summary' => $metrics + [
                 'attributable_profit' => round($attributable, 2),
+                'lifetime_profit_earned' => round($lifetimeEarned, 2),
+                'lifetime_profit_withdrawn' => round($lifetimeWithdrawn, 2),
+                'profit_available_to_withdraw' => round($lifetimeEarned - $lifetimeWithdrawn, 2),
                 'net_sales_change' => $this->percentageChange($metrics['net_sales'], $previousMetrics['net_sales']),
                 'net_profit_change' => $this->percentageChange($metrics['net_profit'], $previousMetrics['net_profit']),
             ],
@@ -490,7 +506,19 @@ class DashboardService
             ->sum('amount');
     }
 
-    public function attributableProfit(User $user, Business $business, CarbonInterface $start, CarbonInterface $end): float
+    /**
+     * $excludePayroll exists only for computing what a profit-share pay-type team
+     * member is owed (see SalaryService::lifetimeProfitShareEarned()) — paying
+     * someone their profit share is itself a payroll cost, which would otherwise
+     * shrink net_profit and, in turn, shrink their own accrued entitlement the
+     * moment they're paid, turning an exact, correct payment into an apparent
+     * overpayment. Excluding payroll here breaks that circular dependency by
+     * measuring the pool before anyone's payout is subtracted from it — the same
+     * way a real profit-sharing pool is decided before it's paid out of. The
+     * dashboard's own attributable profit (the true bottom-line figure) always
+     * calls this with the default false, so it still reflects every real cost.
+     */
+    public function attributableProfit(User $user, Business $business, CarbonInterface $start, CarbonInterface $end, bool $excludePayroll = false): float
     {
         $periods = OwnershipPeriod::query()
             ->where('business_id', $business->id)
@@ -514,7 +542,8 @@ class DashboardService
             }
 
             $metrics = $this->metrics($business, $segmentStart, $segmentEnd);
-            $total += $metrics['net_profit'] * ((float) $period->profit_share_percent / 100);
+            $baseProfit = $excludePayroll ? $metrics['net_profit'] + $metrics['payroll_cost'] : $metrics['net_profit'];
+            $total += $baseProfit * ((float) $period->profit_share_percent / 100);
         }
 
         return round($total, 2);
