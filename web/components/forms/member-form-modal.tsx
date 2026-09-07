@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-const blank = { name: "", email: "", phone: "", password: "", role: "employee" as BusinessRole, full_control: false, title: "", commission_rate: "0", pay_type: "commission" as PayType, salary_amount: "0", salary_visible_to_staff: false, wants_profit_share: false, ownership_percent: "0", profit_share_percent: "0" };
+const blank = { name: "", email: "", phone: "", password: "", role: "employee" as BusinessRole, full_control: false, title: "", commission_rate: "0", pay_type: "fixed_salary" as PayType, salary_amount: "0", salary_visible_to_staff: false, wants_profit_share: false, ownership_percent: "0", profit_share_percent: "0" };
 export function MemberFormModal({ businessId, actorRole, actorFullControl, open, onClose }: { businessId: string | number; actorRole: BusinessRole; actorFullControl: boolean; open: boolean; onClose: () => void }) {
   const roles: BusinessRole[] = actorFullControl ? ["employee", "admin", "owner"] : actorRole === "owner" || actorRole === "admin" ? ["employee", "admin"] : ["employee"];
   const [form, setForm] = useState(blank);
@@ -44,8 +44,10 @@ export function MemberFormModal({ businessId, actorRole, actorFullControl, open,
         <FieldShell label="Temporary password" htmlFor="member-password" error={errors.password?.[0]} hint="For new users: at least 8 characters with letters and numbers"><PasswordInput id="member-password" minLength={8} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder="Letters and numbers" /></FieldShell>
         <FieldShell label="Role" htmlFor="member-role" error={errors.role?.[0]} required><Select id="member-role" value={form.role} onChange={(event) => update("role", event.target.value as BusinessRole)}>{roles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</Select></FieldShell>
         <FieldShell label="Job title" htmlFor="member-title" error={errors.title?.[0]}><Input id="member-title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Sales Executive" /></FieldShell>
-        <FieldShell label="Sales commission" htmlFor="commission-rate" error={errors.commission_rate?.[0]} hint="% of net sales"><Input id="commission-rate" type="number" min="0" max="100" step="0.0001" placeholder="0" value={form.commission_rate} onChange={(event) => update("commission_rate", event.target.value)} /></FieldShell>
-        <FieldShell label="Pay type" htmlFor="member-pay-type" error={errors.pay_type?.[0]}><Select id="member-pay-type" value={form.pay_type} onChange={(event) => update("pay_type", event.target.value as PayType)}><option value="commission">Commission</option><option value="fixed_salary">Fixed salary</option></Select></FieldShell>
+        <FieldShell label="Pay type" htmlFor="member-pay-type" error={errors.pay_type?.[0]}><Select id="member-pay-type" value={form.pay_type} onChange={(event) => update("pay_type", event.target.value as PayType)}><option value="fixed_salary">Fixed salary</option><option value="commission">Sales commission</option></Select></FieldShell>
+        {form.pay_type === "commission" ? (
+          <FieldShell label="Sales commission" htmlFor="commission-rate" error={errors.commission_rate?.[0]} hint="% of net sales"><Input id="commission-rate" type="number" min="0" max="100" step="0.0001" placeholder="0" value={form.commission_rate} onChange={(event) => update("commission_rate", event.target.value)} /></FieldShell>
+        ) : null}
         {form.pay_type === "fixed_salary" ? (
           <>
             <FieldShell label="Monthly salary amount" htmlFor="member-salary-amount" error={errors.salary_amount?.[0]}><Input id="member-salary-amount" type="number" min="0" step="0.01" placeholder="0.00" value={form.salary_amount} onChange={(event) => update("salary_amount", event.target.value)} /></FieldShell>

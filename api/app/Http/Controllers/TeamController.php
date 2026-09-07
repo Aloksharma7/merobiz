@@ -31,6 +31,7 @@ class TeamController extends Controller
         private readonly AuditService $audit,
         private readonly SalaryService $salary,
         private readonly OwnershipService $ownership,
+        private readonly DashboardService $dashboard,
     ) {}
 
     public function index(Request $request, Business $business): JsonResponse
@@ -104,6 +105,7 @@ class TeamController extends Controller
             'commission_earned' => round((float) ($row->commission ?? 0), 2),
             'ownership_percent' => $ownership ? (float) $ownership->ownership_percent : 0.0,
             'profit_share_percent' => $ownership ? (float) $ownership->profit_share_percent : 0.0,
+            'profit_earned' => $this->dashboard->attributableProfit($membership->user, $business, $range->start, $range->end),
             'pay_type' => $salary['pay_type'],
             'salary_amount' => $salary['salary_amount'],
             'salary_visible_to_staff' => $salary['salary_visible_to_staff'],

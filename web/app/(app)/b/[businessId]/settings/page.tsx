@@ -355,12 +355,12 @@ export default function SettingsPage() {
             <CardBody className="space-y-3">
               {([
                 ["dash_overview_cards", "Overview cards", "The profit, net sales, cash collected and receivables cards for the selected date range."],
-                ["dash_profit_breakdown", "Profit breakdown", "Gross profit, expenses, commissions and net profit row (owners and admins only)."],
+                ["dash_profit_breakdown", "Profit breakdown", "Gross profit, expenses and net profit row (owners and admins only)."],
                 ["dash_quick_actions", "Quick actions", "Shortcut tiles for new sale, add expense, add customer and add item."],
                 ["dash_performance_trend", "Performance trend", "The sales and profit chart over the last six months."],
                 ["dash_top_products", "Top products & services", "Best-selling items ranked by net item sales."],
                 ["dash_recent_invoices", "Recent invoices", "The latest sales activity table."],
-                ["dash_expense_mix", "Expense mix", "Approved costs by category (or the commission panel for employees)."],
+                ["dash_expense_mix", "Expense mix", "Approved costs by category (or the profit-share panel for employees)."],
               ] as const).map(([key, label, description]) => (
                 <label key={key} className="flex items-start gap-3 rounded-2xl border border-[var(--line)] p-4">
                   <input type="checkbox" checked={form[key]} onChange={(event) => update(key, event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--brand)]" />

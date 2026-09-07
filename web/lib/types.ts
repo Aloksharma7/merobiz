@@ -445,6 +445,7 @@ export type Member = {
   commission_earned: number;
   ownership_percent: number;
   profit_share_percent: number;
+  profit_earned: number;
   pay_type: PayType;
   salary_amount: number;
   salary_visible_to_staff: boolean;

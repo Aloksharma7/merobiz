@@ -71,8 +71,8 @@ export default function TeamMemberDetailPage() {
       <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <Stat label="Sales" value={money(member.sales, currency)} />
         <Stat label="Invoices" value={String(member.invoice_count)} />
-        <Stat label="Commission earned" value={money(member.commission_earned, currency)} />
         <Stat label="Profit share" value={`${number(member.profit_share_percent, 1)}%`} />
+        <Stat label="Profit earned" value={money(member.profit_earned, currency)} />
       </section>
 
       <Card className="overflow-hidden">

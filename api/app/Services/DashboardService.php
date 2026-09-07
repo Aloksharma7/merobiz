@@ -200,10 +200,13 @@ class DashboardService
             $metrics = $this->employeeSafeMetrics($metrics);
             $previousMetrics = $this->employeeSafeMetrics($previousMetrics);
         }
-        $ownership = $canViewFinancials ? $business->currentOwnershipFor($user, $range->end) : null;
-        $attributable = $canViewFinancials
-            ? $this->attributableProfit($user, $business, $range->start, $range->end)
-            : 0.0;
+        // Always their own record regardless of dashboard.financial — same reasoning as
+        // $attributable below.
+        $ownership = $business->currentOwnershipFor($user, $range->end);
+        // Always computed, even for someone without dashboard.financial — this is only
+        // ever their OWN profit-share cut, never the business's overall figures, so it's
+        // as safe to show as their own sales commission used to be.
+        $attributable = $this->attributableProfit($user, $business, $range->start, $range->end);
 
         $today = CarbonImmutable::now();
         $monthMetrics = $this->metrics($business, $today->startOfMonth(), $today, $creator);
