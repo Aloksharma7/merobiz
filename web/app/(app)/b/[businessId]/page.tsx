@@ -94,7 +94,7 @@ export default function BusinessDashboardPage() {
 
       {layout.show_overview_cards ? (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard emphasis={financial} label={owner ? "Your expected profit" : admin ? "Business expected profit" : "My sales"} value={owner ? data.summary.attributable_profit ?? 0 : admin ? data.summary.net_profit : data.summary.net_sales} currency={currency} icon={CircleDollarSign} hint={owner ? `${data.business.profit_share_percent}% of profit so far, not yet taken out` : admin ? "Sales after costs and expenses" : "Only invoices created by you"} />
+          {(owner || admin) && data.business.is_installment ? null : <MetricCard emphasis={financial} label={owner ? "Your expected profit" : admin ? "Business expected profit" : "My sales"} value={owner ? data.summary.attributable_profit ?? 0 : admin ? data.summary.net_profit : data.summary.net_sales} currency={currency} icon={CircleDollarSign} hint={owner ? `${data.business.profit_share_percent}% of profit so far, not yet taken out` : admin ? "Sales after costs and expenses" : "Only invoices created by you"} />}
           <MetricCard label={employee ? "My invoices" : "Net sales"} value={employee ? data.summary.invoice_count : data.summary.net_sales} currency={currency} valueFormatter={employee ? (value) => number(value) : undefined} icon={TrendingUp} change={employee ? undefined : data.summary.net_sales_change} hint={employee ? `${money(data.summary.net_sales, currency)} total sales` : `${data.summary.invoice_count} invoices`} />
           {employee ? (
             <MetricCard label="My collections" value={data.summary.cash_collected} currency={currency} icon={Landmark} hint="Payments collected against your invoices" />
