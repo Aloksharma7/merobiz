@@ -85,7 +85,7 @@ export default function BusinessDashboardPage() {
           currency={currency}
           onLogProfit={owner ? () => setWithdrawalOpen(true) : undefined}
         />
-        <MetricCard emphasis={!owner} label={financial ? "This month's expected profit" : "This month's sales"} value={financial ? data.month_to_date.profit : data.month_to_date.sales} currency={currency} icon={CalendarClock} hint="Month to date" />
+        {financial && data.business.is_installment ? null : <MetricCard emphasis={!owner} label={financial ? "This month's expected profit" : "This month's sales"} value={financial ? data.month_to_date.profit : data.month_to_date.sales} currency={currency} icon={CalendarClock} hint="Month to date" />}
         {owner ? <MetricCard emphasis label="Profit taken" value={data.profit_collected_this_month} currency={currency} icon={Wallet2} hint="Logged this month" /> : null}
       </section>
       <ProfitWithdrawalFormModal open={withdrawalOpen} onClose={() => setWithdrawalOpen(false)} businesses={[{ id: Number(businessId), name: business.name }]} />
@@ -108,11 +108,11 @@ export default function BusinessDashboardPage() {
       {financial && layout.show_profit_breakdown ? (
         <section className="grid gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-white p-3 shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-4">
           {([
-            ["Expected gross profit", data.summary.gross_profit, "Sales minus direct cost"],
+            ...(data.business.is_installment ? [] : [["Expected gross profit", data.summary.gross_profit, "Sales minus direct cost"]]),
             ["Approved expenses", data.summary.expenses, "Business costs"],
             ["Payroll paid", data.summary.payroll_cost, "Actual salary, commission and advance payouts"],
             ...(data.business.is_installment ? [["Writer payments", data.summary.writer_cost, "Paid to writers for delivered work"]] : []),
-            ["Expected net profit", data.summary.net_profit, "Before owner distribution, not yet withdrawn"],
+            ...(data.business.is_installment ? [] : [["Expected net profit", data.summary.net_profit, "Before owner distribution, not yet withdrawn"]]),
           ] as Array<[string, number, string]>).map(([label, value, note]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-soft)] px-4 py-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">{String(label)}</p><p className="mt-1.5 text-lg font-black tracking-[-0.03em]">{money(Number(value), currency)}</p><p className="mt-1 text-[11px] text-[var(--ink-soft)]">{String(note)}</p></div>)}
         </section>
       ) : null}
