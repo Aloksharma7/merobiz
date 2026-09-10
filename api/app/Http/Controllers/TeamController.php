@@ -408,6 +408,47 @@ class TeamController extends Controller
     }
 
     /**
+     * Removes a member from the team roster entirely — distinct from setting
+     * `active: false`, which keeps them listed but stops counting new pay.
+     * A soft delete (BusinessMembership uses SoftDeletes) so it's reversible
+     * and, critically, doesn't cascade-delete their SalaryPayment history —
+     * money that was actually paid out must stay on the books even after the
+     * person is gone. The same ownership-level guards as update() above
+     * apply: only the founder can remove their own membership, only a
+     * full-control owner can remove an owner, and a business can never be
+     * left without at least one active owner.
+     */
+    public function destroy(Request $request, Business $business, BusinessMembership $membership): JsonResponse
+    {
+        $actorMembership = $this->requirePermission($request, 'team.manage');
+        abort_unless($membership->business_id === $business->id, 404);
+
+        $isFounder = $membership->user_id === $business->owner_id;
+        $actorIsFounder = $request->user()->id === $business->owner_id;
+        abort_if($isFounder && ! $actorIsFounder, 403, 'Only the person who created this business can remove their own membership.');
+
+        if ($membership->role === BusinessRole::Owner) {
+            abort_unless($actorMembership->full_control, 403, 'Only a full-control owner can remove an owner.');
+
+            if ($membership->active) {
+                $otherActiveOwners = $business->memberships()
+                    ->where('id', '!=', $membership->id)
+                    ->where('role', BusinessRole::Owner->value)
+                    ->where('active', true)
+                    ->exists();
+
+                abort_unless($otherActiveOwners, 422, 'A business must keep at least one active owner.');
+            }
+        }
+
+        $before = $membership->toArray();
+        $membership->delete();
+        $this->audit->record($request->user(), $business, 'team.member.removed', $membership, $before, null, $request);
+
+        return response()->json(['message' => 'Team member removed.']);
+    }
+
+    /**
      * Lets an admin get a locked-out teammate back in — including an owner,
      * since a business shouldn't be permanently blocked from its own account
      * over a forgotten password. Intentionally no extra ownership-level guard

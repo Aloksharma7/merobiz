@@ -7,9 +7,12 @@ use App\Enums\PayType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class BusinessMembership extends Model
 {
+    use SoftDeletes;
+
     /** @var array<int, string> */
     protected $fillable = [
         'business_id', 'user_id', 'role', 'full_control', 'title', 'commission_rate', 'active', 'joined_at',

@@ -10,15 +10,16 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageLoading } from "@/components/ui/loading";
-import { api } from "@/lib/api";
+import { api, apiError } from "@/lib/api";
 import { useBusinesses } from "@/lib/business-context";
 import type { Member } from "@/lib/types";
 import { humanize, money, number, prettyDate } from "@/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Edit3, KeyRound, Mail, Phone, Wallet2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Edit3, KeyRound, Mail, Phone, Trash2, Wallet2 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 function roleLabel(member: Member): string {
   if (member.is_founder) return "Founder";
@@ -28,6 +29,7 @@ function roleLabel(member: Member): string {
 
 export default function TeamMemberDetailPage() {
   const { businessId, memberId } = useParams<{ businessId: string; memberId: string }>();
+  const router = useRouter();
   const { getBusiness, can } = useBusinesses();
   const business = getBusiness(businessId);
   const canManage = can(business, "team.manage");
@@ -40,6 +42,16 @@ export default function TeamMemberDetailPage() {
     queryKey: ["team-member", businessId, Number(memberId), range],
     queryFn: async () => (await api.get<{ data: Member }>(`/businesses/${businessId}/team/${memberId}`, { params: range })).data.data,
     enabled: Boolean(business) && canManage,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => api.delete(`/businesses/${businessId}/team/${memberId}`),
+    onSuccess: async () => {
+      toast.success("Team member removed");
+      await queryClient.invalidateQueries({ queryKey: ["team", businessId] });
+      router.replace(`/b/${businessId}/team`);
+    },
+    onError: (error) => toast.error("Could not remove team member", { description: apiError(error) }),
   });
 
   if (!business) return <PageLoading />;
@@ -58,7 +70,7 @@ export default function TeamMemberDetailPage() {
         eyebrow={business.name}
         title={member.name}
         description={[member.title || roleLabel(member), member.email].filter(Boolean).join(" · ")}
-        actions={<><Button variant="ghost" leftIcon={<KeyRound size={16} />} onClick={() => setResettingPassword(true)}>Reset password</Button><Button variant="secondary" leftIcon={<Edit3 size={16} />} onClick={() => setEditing(true)}>Edit member</Button></>}
+        actions={<><Button variant="ghost" leftIcon={<KeyRound size={16} />} onClick={() => setResettingPassword(true)}>Reset password</Button><Button variant="secondary" leftIcon={<Edit3 size={16} />} onClick={() => setEditing(true)}>Edit member</Button><Button variant="danger" leftIcon={<Trash2 size={16} />} loading={deleteMutation.isPending} onClick={() => { if (window.confirm(`Remove ${member.name} from the team? This can't be undone from here.`)) deleteMutation.mutate(); }}>Remove</Button></>}
       />
 
       <div className="flex flex-wrap items-center gap-3">

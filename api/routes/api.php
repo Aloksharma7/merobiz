@@ -116,6 +116,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('/team', [TeamController::class, 'store']);
             Route::get('/team/{membership}', [TeamController::class, 'show']);
             Route::patch('/team/{membership}', [TeamController::class, 'update']);
+            Route::delete('/team/{membership}', [TeamController::class, 'destroy']);
             Route::post('/team/{membership}/reset-password', [TeamController::class, 'resetPassword']);
             Route::get('/team/{membership}/salary', [SalaryController::class, 'index']);
             Route::post('/team/{membership}/salary/payments', [SalaryController::class, 'pay']);
