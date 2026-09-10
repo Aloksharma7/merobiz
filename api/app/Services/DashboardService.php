@@ -55,7 +55,11 @@ class DashboardService
         foreach ($memberships as $membership) {
             $business = $membership->business;
             $canViewFinancials = $membership->allows('dashboard.financial');
-            $creator = $canViewFinancials ? null : $user;
+            // Same reasoning as business() — sales visibility is a lower bar than
+            // financial visibility, so it doesn't scope down to just this member's
+            // own invoices when they can view or manage sales.
+            $canViewAllSales = $canViewFinancials || $membership->allows('sales.view') || $membership->allows('sales.manage');
+            $creator = $canViewAllSales ? null : $user;
             $metrics = $this->metrics($business, $range->start, $range->end, $creator);
             $previousMetrics = $this->metrics($business, $previous->start, $previous->end, $creator);
             if (! $canViewFinancials) {
@@ -66,7 +70,8 @@ class DashboardService
             $attributable = $canViewFinancials
                 ? $this->attributableProfit($user, $business, $range->start, $range->end, netWithdrawals: true)
                 : 0.0;
-            $availableBalance = $canViewFinancials ? $this->availableBalance($business) : $this->emptyAvailableBalance();
+            // Same thesis-business exemption as business() below.
+            $availableBalance = ($canViewFinancials || ! $business->isInstallment()) ? $this->availableBalance($business) : $this->emptyAvailableBalance();
             $totalAvailableBalance += $availableBalance['available_balance'];
             foreach (array_keys($this->emptyMetrics()) as $key) {
                 $summary[$key] += $metrics[$key];
@@ -164,7 +169,8 @@ class DashboardService
         foreach ($memberships as $membership) {
             $business = $membership->business;
             $canViewFinancials = $membership->allows('dashboard.financial');
-            $creator = $canViewFinancials ? null : $user;
+            $canViewAllSales = $canViewFinancials || $membership->allows('sales.view') || $membership->allows('sales.manage');
+            $creator = $canViewAllSales ? null : $user;
             $metrics = $this->metrics($business, $start, $end, $creator);
             $sales += $metrics['net_sales'];
 
@@ -201,7 +207,13 @@ class DashboardService
     public function business(Business $business, User $user, BusinessMembership $membership, DateRange $range): array
     {
         $canViewFinancials = $membership->allows('dashboard.financial');
-        $creator = $canViewFinancials ? null : $user;
+        // Seeing every sale (who sold what, to whom, for how much) is a lower bar
+        // than seeing the business's financials (cost, profit, expenses) — anyone
+        // who can view or manage sales sees the whole company's sales activity,
+        // not just their own, even without dashboard.financial. employeeSafeMetrics()
+        // below still zeroes every cost/profit-derived figure regardless of this.
+        $canViewAllSales = $canViewFinancials || $membership->allows('sales.view') || $membership->allows('sales.manage');
+        $creator = $canViewAllSales ? null : $user;
         $metrics = $this->metrics($business, $range->start, $range->end, $creator);
         $previousMetrics = $this->metrics($business, $range->previous()->start, $range->previous()->end, $creator);
         if (! $canViewFinancials) {
@@ -274,7 +286,11 @@ class DashboardService
             // Not date-range scoped on purpose — a balance is a point-in-time snapshot
             // of what the business actually has, not a period total. It only ever
             // changes because of a new transaction, never because the date filter moved.
-            'available_balance' => $canViewFinancials ? $this->availableBalance($business) : $this->emptyAvailableBalance(),
+            // Visible to every member for a standard business (it's just cash on hand,
+            // not a profit figure), but stays financial-viewer-only for an installment/
+            // thesis business, where project profit approval is manual and available
+            // balance can otherwise be misread as recognized profit.
+            'available_balance' => ($canViewFinancials || ! $business->isInstallment()) ? $this->availableBalance($business) : $this->emptyAvailableBalance(),
             'trend' => $this->businessTrend($business, $range->end, $creator),
             'top_sellers' => $canViewFinancials
                 ? $this->topSellers([$business->id], $range->start, $range->end)
@@ -646,6 +662,11 @@ class DashboardService
         $metrics['writer_cost'] = 0.0;
         $metrics['project_profit'] = 0.0;
         $metrics['net_profit'] = 0.0;
+        // Now that sales visibility can span the whole business (see business()'s
+        // $canViewAllSales), this would otherwise total everyone's commission
+        // combined rather than just the viewer's own — a payroll-adjacent figure
+        // that doesn't belong on a non-financial viewer's dashboard either way.
+        $metrics['commissions'] = 0.0;
 
         return $metrics;
     }

@@ -69,7 +69,7 @@ export default function BusinessDashboardPage() {
       <PageHeader
         eyebrow={employee ? <span className="flex items-center gap-2"><BusinessMark business={business} compact />{branding.tagline || "My sales"}</span> : <span className="flex items-center gap-2"><span className="grid h-6 min-w-6 place-items-center rounded-md bg-[var(--brand-soft)] px-1.5 text-[10px] font-black text-[var(--ink)]">{data.business.code}</span>{humanize(data.business.business_type)}</span>}
         title={data.business.name}
-        description={owner ? `You get ${data.business.profit_share_percent}% of the final net profit, based on your ownership.` : admin ? "Full business performance with staff sales and operational controls." : `Your sales, invoices, collections and customer work for ${data.business.name}. Only your own sales activity is included here.`}
+        description={owner ? `You get ${data.business.profit_share_percent}% of the final net profit, based on your ownership.` : admin ? "Full business performance with staff sales and operational controls." : `Sales, invoices and customer work for ${data.business.name} — the whole team's activity, not just your own.`}
         actions={data.permissions.can_manage_sales ? <LinkButton href={`/b/${businessId}/sales?new=1`} leftIcon={<Plus size={17} />}>New sale</LinkButton> : undefined}
       />
 
@@ -94,14 +94,18 @@ export default function BusinessDashboardPage() {
 
       {layout.show_overview_cards ? (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {(owner || admin) && data.business.is_installment ? null : <MetricCard emphasis={financial} label={owner ? "Your expected profit" : admin ? "Business expected profit" : "My sales"} value={owner ? data.summary.attributable_profit ?? 0 : admin ? data.summary.net_profit : data.summary.net_sales} currency={currency} icon={CircleDollarSign} hint={owner ? `${data.business.profit_share_percent}% of profit so far, not yet taken out` : admin ? "Sales after costs and expenses" : "Only invoices created by you"} />}
-          <MetricCard label={employee ? "My invoices" : "Net sales"} value={employee ? data.summary.invoice_count : data.summary.net_sales} currency={currency} valueFormatter={employee ? (value) => number(value) : undefined} icon={TrendingUp} change={employee ? undefined : data.summary.net_sales_change} hint={employee ? `${money(data.summary.net_sales, currency)} total sales` : `${data.summary.invoice_count} invoices`} />
-          {employee ? (
-            <MetricCard label="My collections" value={data.summary.cash_collected} currency={currency} icon={Landmark} hint="Payments collected against your invoices" />
-          ) : (
+          {employee || ((owner || admin) && data.business.is_installment) ? null : <MetricCard emphasis={financial} label={owner ? "Your expected profit" : "Business expected profit"} value={owner ? data.summary.attributable_profit ?? 0 : data.summary.net_profit} currency={currency} icon={CircleDollarSign} hint={owner ? `${data.business.profit_share_percent}% of profit so far, not yet taken out` : "Sales after costs and expenses"} />}
+          <MetricCard label="Net sales" value={data.summary.net_sales} currency={currency} icon={TrendingUp} change={data.summary.net_sales_change} hint={`${data.summary.invoice_count} invoices`} />
+          {/* Available balance is cash on hand, not a profit figure, so every member sees it in a
+              standard business. For an installment/thesis business it stays financial-viewer-only —
+              project profit there is manually approved, and this figure could be misread as recognized
+              profit — so a non-financial member sees their cash collected instead. */}
+          {financial || !data.business.is_installment ? (
             <MetricCard label="Available balance" value={balance.available_balance} currency={currency} icon={Landmark} hint="What the business has right now — not tied to the date range below" />
+          ) : (
+            <MetricCard label="Cash collected" value={data.summary.cash_collected} currency={currency} icon={Landmark} hint="Payments collected in this range" />
           )}
-          <MetricCard label={employee ? "My outstanding" : "Receivables"} value={data.summary.receivables} currency={currency} icon={HandCoins} hint={employee ? "Unpaid balance on your invoices" : "Balance on invoices dated in this range"} />
+          <MetricCard label="Receivables" value={data.summary.receivables} currency={currency} icon={HandCoins} hint="Balance on invoices dated in this range" />
         </section>
       ) : null}
 
@@ -145,7 +149,7 @@ export default function BusinessDashboardPage() {
           {layout.show_performance_trend ? <TrendChart data={data.trend} currency={currency} salesOnly={!financial} /> : null}
           {layout.show_top_products ? (
             <Card className="overflow-hidden">
-              <CardHeader title={employee ? "My top products & services" : "Top products & services"} description={employee ? "Based only on your sales" : "By net item sales"} />
+              <CardHeader title="Top products & services" description="By net item sales" />
               <CardBody className="p-0">
                 {data.top_products.length ? <div className="divide-y divide-[var(--line)]">{data.top_products.map((product, index) => <div key={`${product.name}-${index}`} className="flex items-center gap-3 px-5 py-3.5"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--surface-soft)] text-xs font-black text-[var(--brand)]">{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{product.name}</p><p className="text-xs text-[var(--ink-soft)]">{number(product.quantity, product.quantity % 1 ? 2 : 0)} sold</p></div><p className="text-sm font-black">{money(product.sales, currency)}</p></div>)}</div> : <EmptyState icon={Boxes} title="No item sales yet" description="Your best-performing products and services will appear here." />}
               </CardBody>
@@ -158,16 +162,16 @@ export default function BusinessDashboardPage() {
         <section className={cn("grid gap-4", layout.show_recent_invoices && layout.show_expense_mix && "xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]")}>
           {layout.show_recent_invoices ? (
             <Card className="overflow-hidden">
-              <CardHeader title={employee ? "My recent invoices" : "Recent invoices"} description={employee ? "Only invoices created by you" : "Latest sales activity"} action={<Link href={`/b/${businessId}/sales`} className="text-xs font-bold text-[var(--brand)] hover:underline">View all</Link>} />
+              <CardHeader title="Recent invoices" description="Latest sales activity" action={<Link href={`/b/${businessId}/sales`} className="text-xs font-bold text-[var(--brand)] hover:underline">View all</Link>} />
               {data.recent_invoices.length ? (
                 <>
                   <div className="hidden overflow-x-auto md:block">
                     <table className="w-full min-w-[680px] text-left text-sm">
-                      <thead><tr className="border-b border-[var(--line)] bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Invoice</th><th className="px-4 py-3 font-bold">Customer</th>{!employee ? <th className="px-4 py-3 font-bold">Seller</th> : null}<th className="px-4 py-3 font-bold">Status</th><th className="px-5 py-3 text-right font-bold">Amount</th></tr></thead>
-                      <tbody className="divide-y divide-[var(--line)]">{data.recent_invoices.map((invoice) => <tr key={invoice.id} className="hover:bg-[var(--surface-soft)]"><td className="px-5 py-3.5"><p className="font-bold">{invoice.invoice_number}</p><p className="text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)}</p></td><td className="px-4 py-3.5 font-medium">{invoice.customer_name}</td>{!employee ? <td className="px-4 py-3.5 text-[var(--ink-soft)]">{invoice.seller_name}</td> : null}<td className="px-4 py-3.5"><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></td><td className="px-5 py-3.5 text-right font-black">{money(invoice.total_amount, currency)}</td></tr>)}</tbody>
+                      <thead><tr className="border-b border-[var(--line)] bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Invoice</th><th className="px-4 py-3 font-bold">Customer</th><th className="px-4 py-3 font-bold">Seller</th><th className="px-4 py-3 font-bold">Status</th><th className="px-5 py-3 text-right font-bold">Amount</th></tr></thead>
+                      <tbody className="divide-y divide-[var(--line)]">{data.recent_invoices.map((invoice) => <tr key={invoice.id} className="hover:bg-[var(--surface-soft)]"><td className="px-5 py-3.5"><p className="font-bold">{invoice.invoice_number}</p><p className="text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)}</p></td><td className="px-4 py-3.5 font-medium">{invoice.customer_name}</td><td className="px-4 py-3.5 text-[var(--ink-soft)]">{invoice.seller_name}</td><td className="px-4 py-3.5"><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></td><td className="px-5 py-3.5 text-right font-black">{money(invoice.total_amount, currency)}</td></tr>)}</tbody>
                     </table>
                   </div>
-                  <div className="divide-y divide-[var(--line)] md:hidden">{data.recent_invoices.map((invoice) => <div key={invoice.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold">{invoice.invoice_number}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{invoice.customer_name}{!employee ? ` · ${invoice.seller_name}` : ""}</p></div><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></div><div className="mt-3 flex items-center justify-between"><p className="text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)}</p><p className="text-lg font-black">{money(invoice.total_amount, currency)}</p></div></div>)}</div>
+                  <div className="divide-y divide-[var(--line)] md:hidden">{data.recent_invoices.map((invoice) => <div key={invoice.id} className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold">{invoice.invoice_number}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{invoice.customer_name} · {invoice.seller_name}</p></div><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></div><div className="mt-3 flex items-center justify-between"><p className="text-xs text-[var(--ink-soft)]">{prettyDate(invoice.invoice_date)}</p><p className="text-lg font-black">{money(invoice.total_amount, currency)}</p></div></div>)}</div>
                 </>
               ) : <EmptyState icon={ReceiptText} title="No invoices yet" description={data.permissions.can_manage_sales ? "Create the first sale to start tracking performance." : "Sales activity will appear here when invoices are created."} action={data.permissions.can_manage_sales ? <LinkButton href={`/b/${businessId}/sales?new=1`} leftIcon={<Plus size={16} />}>Create invoice</LinkButton> : undefined} />}
             </Card>

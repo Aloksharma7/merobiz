@@ -18,16 +18,17 @@ class CustomerController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly AuditService $audit)
-    {
-    }
+    public function __construct(private readonly AuditService $audit) {}
 
     public function index(Request $request, Business $business): AnonymousResourceCollection
     {
         $membership = $this->membership($request);
         abort_unless($membership->allows('customers.view') || $membership->allows('customers.manage'), 403);
 
-        $employeeOnly = $membership->role->value === 'employee';
+        // Sales activity is visible business-wide to anyone who can view or manage
+        // sales (the Employee role grants sales.view by default) — only scope down
+        // to just their own invoices for someone who genuinely can't see the rest.
+        $employeeOnly = ! ($membership->allows('sales.view') || $membership->allows('sales.manage'));
 
         $customers = $business->customers()
             ->withSum(['invoices as outstanding_balance' => function ($query) use ($request, $employeeOnly): void {

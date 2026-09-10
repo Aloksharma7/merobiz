@@ -45,7 +45,7 @@ class EmployeeWorkspaceTest extends TestCase
         $this->getJson("/api/businesses/{$business->id}/reports/profit-loss")->assertForbidden();
     }
 
-    public function test_employee_dashboard_invoices_and_customer_balance_only_use_their_own_sales(): void
+    public function test_employee_dashboard_shows_the_whole_businesss_sales_but_not_its_financials(): void
     {
         $owner = $this->user('Owner', 'owner-sales@example.test');
         $employee = $this->user('Employee One', 'employee-one@example.test');
@@ -72,13 +72,19 @@ class EmployeeWorkspaceTest extends TestCase
 
         Sanctum::actingAs($employee);
 
+        // Sales activity (who sold what, company-wide) is visible to any employee
+        // with sales.view, which the Employee role grants by default — but the
+        // dashboard stays in "personal" mode and every cost/profit-derived figure
+        // stays zeroed, since that's still gated by dashboard.financial alone.
         $this->getJson("/api/businesses/{$business->id}/dashboard")
             ->assertOk()
             ->assertJsonPath('mode', 'personal')
-            ->assertJsonPath('summary.net_sales', 1000)
-            ->assertJsonPath('summary.invoice_count', 1)
-            ->assertJsonCount(1, 'recent_invoices')
-            ->assertJsonPath('recent_invoices.0.seller_name', 'Employee One');
+            ->assertJsonPath('summary.net_sales', 3500)
+            ->assertJsonPath('summary.invoice_count', 2)
+            ->assertJsonPath('summary.cost_of_sales', 0)
+            ->assertJsonPath('summary.net_profit', 0)
+            ->assertJsonPath('summary.commissions', 0)
+            ->assertJsonCount(2, 'recent_invoices');
 
         $this->getJson("/api/businesses/{$business->id}/invoices")
             ->assertOk()
@@ -91,7 +97,7 @@ class EmployeeWorkspaceTest extends TestCase
 
         $this->getJson("/api/businesses/{$business->id}/customers")
             ->assertOk()
-            ->assertJsonPath('data.0.outstanding_balance', 1000);
+            ->assertJsonPath('data.0.outstanding_balance', 3500);
     }
 
     public function test_employee_cannot_be_assigned_to_two_active_businesses(): void
