@@ -3,9 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreInvoiceRequest;
+use App\Http\Requests\UpdateInvoiceItemRequest;
+use App\Http\Resources\InvoiceItemResource;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Business;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Services\AuditService;
 use App\Services\InvoiceService;
 use App\Support\AuthorizesBusinessActions;
 use App\Support\AuthorizesInvoiceAccess;
@@ -19,7 +23,10 @@ class InvoiceController extends Controller
     use AuthorizesBusinessActions;
     use AuthorizesInvoiceAccess;
 
-    public function __construct(private readonly InvoiceService $invoices) {}
+    public function __construct(
+        private readonly InvoiceService $invoices,
+        private readonly AuditService $audit,
+    ) {}
 
     public function index(Request $request, Business $business): AnonymousResourceCollection
     {
@@ -132,6 +139,30 @@ class InvoiceController extends Controller
         $cancelled = $this->invoices->cancel($business, $invoice, $request->user());
 
         return response()->json(['message' => 'Invoice cancelled.', 'invoice' => new InvoiceResource($cancelled)]);
+    }
+
+    /**
+     * Lets whoever can edit this sale customize what a line item is called on
+     * the bill — the printed invoice already shows this per-item description
+     * rather than the live catalogue product name (see the print template),
+     * so this only ever affects that one sale's paperwork. It never touches
+     * the product's own name in the catalogue, and never recalculates
+     * anything financial: quantity, price, tax and cost stay exactly as they
+     * were, so this is safe even on an already-issued invoice.
+     */
+    public function updateItem(UpdateInvoiceItemRequest $request, Business $business, Invoice $invoice, InvoiceItem $item): JsonResponse
+    {
+        $this->assertEditable($request, $business, $invoice);
+        abort_unless($item->invoice_id === $invoice->id, 404);
+
+        $before = $item->toArray();
+        $item->update(['description' => $request->validated('description')]);
+        $this->audit->record($request->user(), $business, 'invoice_item.description_updated', $item, $before, $item->fresh()->toArray(), $request);
+
+        return response()->json([
+            'message' => 'Item updated.',
+            'item' => new InvoiceItemResource($item->fresh()->load('product')),
+        ]);
     }
 
     public function destroy(Request $request, Business $business, Invoice $invoice): JsonResponse

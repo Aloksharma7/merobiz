@@ -98,6 +98,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::delete('/invoices/{invoice}/payments/{payment}', [PaymentController::class, 'destroy']);
             Route::get('/invoices/{invoice}/installments', [InvoiceInstallmentController::class, 'index']);
             Route::put('/invoices/{invoice}/installments', [InvoiceInstallmentController::class, 'store']);
+            Route::patch('/invoices/{invoice}/items/{item}', [InvoiceController::class, 'updateItem']);
             Route::get('/invoices/{invoice}/items/{item}/writers', [InvoiceItemWriterController::class, 'index']);
             Route::post('/invoices/{invoice}/items/{item}/writers', [InvoiceItemWriterController::class, 'store']);
 

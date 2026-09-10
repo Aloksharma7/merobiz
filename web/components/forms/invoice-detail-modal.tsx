@@ -3,18 +3,21 @@
 import { PaymentFormModal } from "@/components/forms/payment-form-modal";
 import { Badge, statusTone } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/modal";
 import { api, apiError } from "@/lib/api";
-import type { ApiMessage, Business, Invoice, InvoiceInstallment, Payment } from "@/lib/types";
+import type { ApiMessage, Business, Invoice, InvoiceInstallment, InvoiceItem, Payment } from "@/lib/types";
 import { humanize, money, prettyDate } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Banknote, Ban, FileCheck2, Pencil, Printer, ReceiptText, Trash2 } from "lucide-react";
+import { Banknote, Ban, Check, FileCheck2, Pencil, Printer, ReceiptText, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export function InvoiceDetailModal({ business, invoice, open, onClose }: { business: Business; invoice: Invoice | null; open: boolean; onClose: () => void }) {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [itemDescriptionDraft, setItemDescriptionDraft] = useState("");
   const queryClient = useQueryClient();
   const canManageAllSales = business.permissions.includes("*") || business.permissions.includes("sales.manage");
   const canCreateOwnSales = business.permissions.includes("sales.create");
@@ -24,17 +27,35 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
   const canDeleteSale = canManageAllSales;
   const installmentsEnabled = Boolean(business.settings?.features?.installments);
 
+  // The invoice prop is a static snapshot captured when a list row was clicked —
+  // actions taken inside this modal (undo/edit a payment, rename an item) must
+  // still be visible without closing and reopening it, so always prefer a fresh
+  // fetch over the stale prop while this is open.
+  const freshQuery = useQuery({
+    queryKey: ["invoice", String(business.id), invoice?.id],
+    queryFn: async () => (await api.get<{ data: Invoice }>(`/businesses/${business.id}/invoices/${invoice?.id}`)).data.data,
+    enabled: open && Boolean(invoice),
+  });
+  const current = freshQuery.data ?? invoice;
+
   const installmentsQuery = useQuery({
     queryKey: ["invoice-installments", String(business.id), invoice?.id],
     queryFn: async () => (await api.get<{ data: InvoiceInstallment[] }>(`/businesses/${business.id}/invoices/${invoice?.id}/installments`)).data.data,
     enabled: open && Boolean(invoice) && installmentsEnabled,
   });
 
+  async function refreshInvoice() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["invoices", String(business.id)] }),
+      queryClient.invalidateQueries({ queryKey: ["invoice", String(business.id), invoice?.id] }),
+    ]);
+  }
+
   const actionMutation = useMutation({
     mutationFn: async (action: "issue" | "cancel") => (await api.post<ApiMessage<{ invoice: Invoice }>>(`/businesses/${business.id}/invoices/${invoice?.id}/${action}`)).data,
     onSuccess: async (_response, action) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["invoices", String(business.id)] }),
+        refreshInvoice(),
         queryClient.invalidateQueries({ queryKey: ["business-dashboard", String(business.id)] }),
         queryClient.invalidateQueries({ queryKey: ["portfolio-dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["team", String(business.id)] }),
@@ -53,7 +74,7 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
     mutationFn: async () => api.delete(`/businesses/${business.id}/invoices/${invoice?.id}`),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["invoices", String(business.id)] }),
+        refreshInvoice(),
         queryClient.invalidateQueries({ queryKey: ["business-dashboard", String(business.id)] }),
         queryClient.invalidateQueries({ queryKey: ["portfolio-dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["team", String(business.id)] }),
@@ -73,8 +94,7 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
     mutationFn: async (payment: Payment) => api.delete(`/businesses/${business.id}/invoices/${invoice?.id}/payments/${payment.id}`),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["invoices", String(business.id)] }),
-        queryClient.invalidateQueries({ queryKey: ["invoice", String(business.id), invoice?.id] }),
+        refreshInvoice(),
         queryClient.invalidateQueries({ queryKey: ["business-dashboard", String(business.id)] }),
         queryClient.invalidateQueries({ queryKey: ["portfolio-dashboard"] }),
       ]);
@@ -83,29 +103,51 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
     onError: (error) => toast.error("Could not undo this payment", { description: apiError(error) }),
   });
 
-  if (!invoice) return null;
+  const renameItemMutation = useMutation({
+    mutationFn: async (item: InvoiceItem) => (await api.patch<ApiMessage<{ item: InvoiceItem }>>(`/businesses/${business.id}/invoices/${invoice?.id}/items/${item.id}`, { description: itemDescriptionDraft })).data,
+    onSuccess: async () => {
+      await refreshInvoice();
+      toast.success("Item updated");
+      setEditingItemId(null);
+    },
+    onError: (error) => toast.error("Could not update item", { description: apiError(error) }),
+  });
+
+  if (!invoice || !current) return null;
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title={invoice.invoice_number} description={`${prettyDate(invoice.invoice_date)} · ${invoice.customer_name || invoice.customer?.name || "Walk-in customer"}`} size="lg" footer={
+      <Modal open={open} onClose={onClose} title={current.invoice_number} description={`${prettyDate(current.invoice_date)} · ${current.customer_name || current.customer?.name || "Walk-in customer"}`} size="lg" footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
-          {invoice.status === "draft" && canManageThisSale ? <Button variant="secondary" leftIcon={<FileCheck2 size={16} />} onClick={() => actionMutation.mutate("issue")} loading={actionMutation.isPending}>Issue</Button> : null}
-          {!(invoice.status === "draft" || ["cancelled", "refunded"].includes(invoice.status)) && invoice.paid_amount === 0 && canManageThisSale ? <Button variant="secondary" leftIcon={<Ban size={16} />} onClick={() => actionMutation.mutate("cancel")} loading={actionMutation.isPending}>Cancel</Button> : null}
-          {invoice.balance_amount > 0 && !(["draft", "cancelled", "refunded"].includes(invoice.status)) && canRecordPayment ? <Button leftIcon={<Banknote size={16} />} onClick={() => setPaymentOpen(true)}>Record payment</Button> : null}
+          {current.status === "draft" && canManageThisSale ? <Button variant="secondary" leftIcon={<FileCheck2 size={16} />} onClick={() => actionMutation.mutate("issue")} loading={actionMutation.isPending}>Issue</Button> : null}
+          {!(current.status === "draft" || ["cancelled", "refunded"].includes(current.status)) && current.paid_amount === 0 && canManageThisSale ? <Button variant="secondary" leftIcon={<Ban size={16} />} onClick={() => actionMutation.mutate("cancel")} loading={actionMutation.isPending}>Cancel</Button> : null}
+          {current.balance_amount > 0 && !(["draft", "cancelled", "refunded"].includes(current.status)) && canRecordPayment ? <Button leftIcon={<Banknote size={16} />} onClick={() => setPaymentOpen(true)}>Record payment</Button> : null}
           {canDeleteSale ? <Button variant="secondary" leftIcon={<Trash2 size={16} />} loading={deleteMutation.isPending} onClick={() => { if (window.confirm("Delete this sale? This permanently removes the invoice and its payments, and cannot be undone.")) deleteMutation.mutate(); }}>Delete</Button> : null}
         </>
       }>
         <div className="space-y-6">
           <div className="rounded-2xl bg-[var(--surface-soft)] p-4">
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--ink-soft)]">Invoice status</p>
-            <div className="mt-2"><Badge tone={statusTone(invoice.status)}>{invoice.status}</Badge></div>
+            <div className="mt-2"><Badge tone={statusTone(current.status)}>{current.status}</Badge></div>
             <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">Sales are recorded immediately when entered. No approval step is required.</p>
           </div>
 
-          <div className="flex justify-end"><LinkButton href={`/print/invoices/${business.id}/${invoice.id}`} target="_blank" variant="secondary" size="sm" leftIcon={<Printer size={15} />}>Print or PDF</LinkButton></div>
+          <div className="flex justify-end"><LinkButton href={`/print/invoices/${business.id}/${current.id}`} target="_blank" variant="secondary" size="sm" leftIcon={<Printer size={15} />}>Print or PDF</LinkButton></div>
 
-          <div className="overflow-hidden rounded-2xl border border-[var(--line)]"><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-4 py-3 font-bold">Description</th><th className="px-3 py-3 text-right font-bold">Qty</th><th className="px-3 py-3 text-right font-bold">Rate</th><th className="px-3 py-3 text-right font-bold">Tax</th><th className="px-4 py-3 text-right font-bold">Total</th></tr></thead><tbody className="divide-y divide-[var(--line)]">{invoice.items?.map((item) => <tr key={item.id}><td className="px-4 py-3.5 font-semibold">{item.description}</td><td className="px-3 py-3.5 text-right">{item.quantity}</td><td className="px-3 py-3.5 text-right">{money(item.unit_price, business.currency)}</td><td className="px-3 py-3.5 text-right">{item.tax_rate}%</td><td className="px-4 py-3.5 text-right font-bold">{money(item.line_total, business.currency)}</td></tr>)}</tbody></table></div></div>
+          <div className="overflow-hidden rounded-2xl border border-[var(--line)]"><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-4 py-3 font-bold">Description</th><th className="px-3 py-3 text-right font-bold">Qty</th><th className="px-3 py-3 text-right font-bold">Rate</th><th className="px-3 py-3 text-right font-bold">Tax</th><th className="px-4 py-3 text-right font-bold">Total</th></tr></thead><tbody className="divide-y divide-[var(--line)]">{current.items?.map((item) => <tr key={item.id}><td className="px-4 py-3.5 font-semibold">{editingItemId === item.id ? (
+            <div className="flex items-center gap-1.5">
+              <Input autoFocus value={itemDescriptionDraft} onChange={(event) => setItemDescriptionDraft(event.target.value)} className="h-8 py-1 text-sm" maxLength={255} />
+              <button type="button" disabled={renameItemMutation.isPending || !itemDescriptionDraft.trim()} onClick={() => renameItemMutation.mutate(item)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[var(--brand)] hover:bg-[var(--brand-soft)] disabled:opacity-40" aria-label="Save item name"><Check size={14} /></button>
+              <button type="button" onClick={() => setEditingItemId(null)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[var(--ink-soft)] hover:bg-[var(--surface-soft)]" aria-label="Cancel"><X size={14} /></button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span>{item.description}</span>
+              {canManageThisSale ? <button type="button" onClick={() => { setEditingItemId(item.id); setItemDescriptionDraft(item.description); }} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[var(--ink-soft)] hover:bg-[var(--surface-soft)]" aria-label="Rename this item on the bill"><Pencil size={12} /></button> : null}
+            </div>
+          )}</td><td className="px-3 py-3.5 text-right">{item.quantity}</td><td className="px-3 py-3.5 text-right">{money(item.unit_price, business.currency)}</td><td className="px-3 py-3.5 text-right">{item.tax_rate}%</td><td className="px-4 py-3.5 text-right font-bold">{money(item.line_total, business.currency)}</td></tr>)}</tbody></table></div></div>
+          {canManageThisSale ? <p className="text-xs leading-5 text-[var(--ink-soft)]">Renaming an item only changes what this one bill shows — the product's name in your catalogue is never affected.</p> : null}
 
           {installmentsQuery.data?.length ? (
             <div>
@@ -127,14 +169,14 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
             </div>
           ) : null}
 
-          <div className="ml-auto max-w-sm space-y-2 rounded-2xl bg-[var(--brand-deep)] p-5 text-sm text-[var(--on-brand-deep)]"><Line label="Subtotal" value={money(invoice.subtotal, business.currency)} /><Line label="Discount" value={`− ${money(invoice.discount_amount, business.currency)}`} /><Line label="Tax" value={money(invoice.tax_amount, business.currency)} /><div className="border-t border-[var(--on-brand-deep)]/12 pt-2"><Line label="Invoice total" value={money(invoice.total_amount, business.currency)} strong /></div><Line label="Paid" value={money(invoice.paid_amount, business.currency)} /><div className="border-t border-[var(--on-brand-deep)]/12 pt-2"><Line label="Balance" value={money(invoice.balance_amount, business.currency)} strong /></div></div>
+          <div className="ml-auto max-w-sm space-y-2 rounded-2xl bg-[var(--brand-deep)] p-5 text-sm text-[var(--on-brand-deep)]"><Line label="Subtotal" value={money(current.subtotal, business.currency)} /><Line label="Discount" value={`− ${money(current.discount_amount, business.currency)}`} /><Line label="Tax" value={money(current.tax_amount, business.currency)} /><div className="border-t border-[var(--on-brand-deep)]/12 pt-2"><Line label="Invoice total" value={money(current.total_amount, business.currency)} strong /></div><Line label="Paid" value={money(current.paid_amount, business.currency)} /><div className="border-t border-[var(--on-brand-deep)]/12 pt-2"><Line label="Balance" value={money(current.balance_amount, business.currency)} strong /></div></div>
 
-          {invoice.payments?.length ? <div><h3 className="mb-3 font-extrabold">Payment history</h3><div className="space-y-2">{invoice.payments.map((payment) => <div key={payment.id} className="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><ReceiptText size={16} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold">{payment.payment_number}</p><p className="text-xs text-[var(--ink-soft)]">{prettyDate(payment.payment_date)} · {humanize(payment.method)}</p></div><p className="font-black">{money(payment.amount, business.currency)}</p>{canRecordPayment ? <div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => setEditingPayment(payment)} className="grid h-8 w-8 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--surface-soft)]" aria-label="Edit payment"><Pencil size={14} /></button><button type="button" disabled={deletePaymentMutation.isPending} onClick={() => { if (window.confirm("Undo this payment? This removes it entirely, as if it never happened.")) deletePaymentMutation.mutate(payment); }} className="grid h-8 w-8 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40" aria-label="Undo this payment"><Trash2 size={14} /></button></div> : null}</div>)}</div></div> : null}
-          {invoice.notes ? <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4"><p className="text-xs font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Notes</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6">{invoice.notes}</p></div> : null}
+          {current.payments?.length ? <div><h3 className="mb-3 font-extrabold">Payment history</h3><div className="space-y-2">{current.payments.map((payment) => <div key={payment.id} className="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><ReceiptText size={16} /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold">{payment.payment_number}</p><p className="text-xs text-[var(--ink-soft)]">{prettyDate(payment.payment_date)} · {humanize(payment.method)}</p></div><p className="font-black">{money(payment.amount, business.currency)}</p>{canRecordPayment ? <div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => setEditingPayment(payment)} className="grid h-8 w-8 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--surface-soft)]" aria-label="Edit payment"><Pencil size={14} /></button><button type="button" disabled={deletePaymentMutation.isPending} onClick={() => { if (window.confirm("Undo this payment? This removes it entirely, as if it never happened.")) deletePaymentMutation.mutate(payment); }} className="grid h-8 w-8 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40" aria-label="Undo this payment"><Trash2 size={14} /></button></div> : null}</div>)}</div></div> : null}
+          {current.notes ? <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-soft)] p-4"><p className="text-xs font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Notes</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6">{current.notes}</p></div> : null}
         </div>
       </Modal>
-      <PaymentFormModal businessId={business.id} invoice={invoice} open={paymentOpen} onClose={() => { setPaymentOpen(false); onClose(); }} currency={business.currency} />
-      <PaymentFormModal businessId={business.id} invoice={invoice} payment={editingPayment} open={!!editingPayment} onClose={() => setEditingPayment(null)} currency={business.currency} />
+      <PaymentFormModal businessId={business.id} invoice={current} open={paymentOpen} onClose={() => { setPaymentOpen(false); void refreshInvoice(); }} currency={business.currency} />
+      <PaymentFormModal businessId={business.id} invoice={current} payment={editingPayment} open={!!editingPayment} onClose={() => setEditingPayment(null)} currency={business.currency} />
     </>
   );
 }
