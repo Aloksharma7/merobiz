@@ -14,8 +14,8 @@ import { useBusinesses } from "@/lib/business-context";
 import type { ApiMessage, Business, BusinessType, Member, OwnershipRecord } from "@/lib/types";
 import { number, prettyDate } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, CalendarClock, Eye, FileText, Landmark, LayoutDashboard, Palette, Percent, Plus, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, Trash2, Upload, UsersRound } from "lucide-react";
-import { useParams } from "next/navigation";
+import { AlertTriangle, Building2, CalendarClock, Eye, FileText, Landmark, LayoutDashboard, Palette, Percent, Plus, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, Trash2, Upload, UsersRound } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -145,6 +145,7 @@ function toForm(business: Business): FormState {
 
 export default function SettingsPage() {
   const { businessId } = useParams<{ businessId: string }>();
+  const router = useRouter();
   const { getBusiness } = useBusinesses();
   const business = getBusiness(businessId);
   const queryClient = useQueryClient();
@@ -152,6 +153,7 @@ export default function SettingsPage() {
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [ownershipOpen, setOwnershipOpen] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
   const owner = business?.my_role === "owner";
   const canManageOwnership = business?.full_control ?? false;
@@ -274,6 +276,16 @@ export default function SettingsPage() {
       toast.success("Business logo removed");
     },
     onError: (error) => toast.error("Could not remove logo", { description: apiError(error) }),
+  });
+
+  const deleteBusinessMutation = useMutation({
+    mutationFn: async () => (await api.delete<ApiMessage>(`/businesses/${businessId}`)).data,
+    onSuccess: async () => {
+      toast.success("Business deleted");
+      await queryClient.invalidateQueries({ queryKey: ["businesses"] });
+      router.replace("/");
+    },
+    onError: (error) => toast.error("Could not delete business", { description: apiError(error) }),
   });
 
   const currentOwnerships = useMemo(() => ownerships.data?.filter((row) => row.current) ?? [], [ownerships.data]);
@@ -518,6 +530,21 @@ export default function SettingsPage() {
                   {(ownerships.data ?? []).map((row) => <div key={row.id} className="rounded-2xl border border-[var(--line)] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-bold">{row.name}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">From {prettyDate(row.effective_from)}{row.effective_to ? ` to ${prettyDate(row.effective_to)}` : " onward"}</p></div><Badge tone={row.current ? "success" : "neutral"}>{row.current ? "Current" : "History"}</Badge></div><div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm"><span><strong>{number(row.ownership_percent, 2)}%</strong> ownership</span><span><strong>{number(row.profit_share_percent, 2)}%</strong> profit share</span></div>{row.notes ? <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">{row.notes}</p> : null}</div>)}
                 </div>
                 {!ownerships.isLoading && !ownerships.data?.length ? <p className="text-sm text-[var(--ink-soft)]">No dated ownership records are available.</p> : null}
+              </CardBody>
+            </Card>
+          ) : null}
+
+          {canManageOwnership ? (
+            <Card className="border-[var(--danger)]/30">
+              <CardHeader title={<span className="flex items-center gap-2 text-[var(--danger)]"><AlertTriangle size={18} />Danger zone</span>} description="This cannot be undone from here — talk to support if you need it back." />
+              <CardBody className="space-y-3">
+                <p className="text-sm leading-6 text-[var(--ink-soft)]">Deleting <strong>{business.name}</strong> removes it from every member&apos;s workspace, including yours. Its sales, expenses and history are not shown anywhere afterward.</p>
+                <FieldShell label={`Type "${business.name}" to confirm`} htmlFor="delete-business-confirm">
+                  <Input id="delete-business-confirm" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} placeholder={business.name} />
+                </FieldShell>
+                <Button type="button" variant="danger" leftIcon={<Trash2 size={16} />} disabled={deleteConfirmation !== business.name} loading={deleteBusinessMutation.isPending} onClick={() => deleteBusinessMutation.mutate()}>
+                  Delete this business
+                </Button>
               </CardBody>
             </Card>
           ) : null}

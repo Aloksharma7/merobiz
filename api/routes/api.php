@@ -74,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         ->group(function (): void {
             Route::get('/', [BusinessController::class, 'show']);
             Route::patch('/', [BusinessController::class, 'update']);
+            Route::delete('/', [BusinessController::class, 'destroy']);
             Route::post('/branding/logo', [BusinessController::class, 'uploadLogo']);
             Route::delete('/branding/logo', [BusinessController::class, 'destroyLogo']);
             Route::get('/dashboard', BusinessDashboardController::class);
@@ -115,6 +116,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('/team', [TeamController::class, 'store']);
             Route::get('/team/{membership}', [TeamController::class, 'show']);
             Route::patch('/team/{membership}', [TeamController::class, 'update']);
+            Route::post('/team/{membership}/reset-password', [TeamController::class, 'resetPassword']);
             Route::get('/team/{membership}/salary', [SalaryController::class, 'index']);
             Route::post('/team/{membership}/salary/payments', [SalaryController::class, 'pay']);
             Route::patch('/team/{membership}/salary/payments/{payment}', [SalaryController::class, 'update'])->withoutScopedBindings();

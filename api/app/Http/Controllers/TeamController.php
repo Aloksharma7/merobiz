@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\BusinessRole;
 use App\Enums\PayType;
+use App\Http\Requests\ResetMemberPasswordRequest;
 use App\Models\Business;
 use App\Models\BusinessMembership;
 use App\Models\Invoice;
@@ -404,5 +405,24 @@ class TeamController extends Controller
                 'salary_visible_to_staff' => $membership->salary_visible_to_staff,
             ],
         ]);
+    }
+
+    /**
+     * Lets an admin get a locked-out teammate back in — including an owner,
+     * since a business shouldn't be permanently blocked from its own account
+     * over a forgotten password. Intentionally no extra ownership-level guard
+     * here (unlike role/full_control changes above): setting a new password
+     * doesn't transfer any control, it only restores access to an account
+     * that's already theirs.
+     */
+    public function resetPassword(ResetMemberPasswordRequest $request, Business $business, BusinessMembership $membership): JsonResponse
+    {
+        $this->requirePermission($request, 'team.manage');
+        abort_unless($membership->business_id === $business->id, 404);
+
+        $membership->user->update(['password' => $request->validated('password')]);
+        $this->audit->record($request->user(), $business, 'team.member.password_reset', $membership, null, null, $request);
+
+        return response()->json(['message' => 'Password reset.']);
     }
 }

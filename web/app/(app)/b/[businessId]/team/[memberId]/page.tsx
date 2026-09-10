@@ -3,6 +3,7 @@
 import { DateRangeControl, defaultRange, type DateRangeValue } from "@/components/dashboard/date-range-control";
 import { PayrollPanel } from "@/components/dashboard/payroll-panel";
 import { MemberEditModal } from "@/components/forms/member-edit-modal";
+import { ResetPasswordModal } from "@/components/forms/reset-password-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -14,7 +15,7 @@ import { useBusinesses } from "@/lib/business-context";
 import type { Member } from "@/lib/types";
 import { humanize, money, number, prettyDate } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Edit3, Mail, Phone, Wallet2 } from "lucide-react";
+import { ArrowLeft, Edit3, KeyRound, Mail, Phone, Wallet2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -33,6 +34,7 @@ export default function TeamMemberDetailPage() {
   const queryClient = useQueryClient();
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
   const [editing, setEditing] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   const query = useQuery({
     queryKey: ["team-member", businessId, Number(memberId), range],
@@ -56,7 +58,7 @@ export default function TeamMemberDetailPage() {
         eyebrow={business.name}
         title={member.name}
         description={[member.title || roleLabel(member), member.email].filter(Boolean).join(" · ")}
-        actions={<Button variant="secondary" leftIcon={<Edit3 size={16} />} onClick={() => setEditing(true)}>Edit member</Button>}
+        actions={<><Button variant="ghost" leftIcon={<KeyRound size={16} />} onClick={() => setResettingPassword(true)}>Reset password</Button><Button variant="secondary" leftIcon={<Edit3 size={16} />} onClick={() => setEditing(true)}>Edit member</Button></>}
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -89,6 +91,7 @@ export default function TeamMemberDetailPage() {
         open={editing}
         onClose={() => { setEditing(false); void queryClient.invalidateQueries({ queryKey: ["team-member", businessId, Number(memberId)] }); }}
       />
+      <ResetPasswordModal businessId={businessId} memberId={member.id} memberName={member.name} open={resettingPassword} onClose={() => setResettingPassword(false)} />
     </div>
   );
 }

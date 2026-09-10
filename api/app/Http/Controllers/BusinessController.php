@@ -23,9 +23,7 @@ class BusinessController extends Controller
 {
     use AuthorizesBusinessActions;
 
-    public function __construct(private readonly AuditService $audit)
-    {
-    }
+    public function __construct(private readonly AuditService $audit) {}
 
     public function index(Request $request, BusinessListingService $businesses): AnonymousResourceCollection
     {
@@ -185,6 +183,25 @@ class BusinessController extends Controller
         ]);
     }
 
+    /**
+     * Deleting the business itself — as opposed to any record inside it — is
+     * kept to the founder-level "full-control" owner, the same bar as changing
+     * ownership stakes or granting/revoking full control (see TeamController).
+     * A soft delete (Business uses SoftDeletes) so a mistaken deletion is
+     * recoverable and nothing it references gets cascade-deleted.
+     */
+    public function destroy(Request $request, Business $business): JsonResponse
+    {
+        $membership = $this->membership($request);
+        abort_unless($membership->full_control, 403, 'Only a full-control owner can delete the business.');
+
+        $before = $business->toArray();
+        $business->delete();
+        $this->audit->record($request->user(), $business, 'business.deleted', $business, $before, null, $request);
+
+        return response()->json(['message' => 'Business deleted.']);
+    }
+
     public function uploadLogo(Request $request, Business $business): JsonResponse
     {
         $this->requirePermission($request, 'business.update');
@@ -222,7 +239,9 @@ class BusinessController extends Controller
         $before = $business->toArray();
         $settings = $business->settings ?? [];
         $path = data_get($settings, 'branding.logo_path');
-        if ($path) Storage::disk('public')->delete($path);
+        if ($path) {
+            Storage::disk('public')->delete($path);
+        }
         data_set($settings, 'branding.logo_path', null);
         $business->update(['settings' => $settings]);
 
