@@ -31,6 +31,36 @@ class SalaryController extends Controller
     }
 
     /**
+     * Every payroll payment across the whole business, regardless of who it was
+     * paid to — shown alongside expenses so the real cost of running the
+     * business is visible in one place, not split across the Team and
+     * Expenses pages.
+     */
+    public function businessIndex(Request $request, Business $business): JsonResponse
+    {
+        $this->requirePermission($request, 'team.manage');
+
+        $payments = $business->salaryPayments()
+            ->with(['membership.user:id,name', 'recorder:id,name'])
+            ->latest('payment_date')
+            ->latest('id')
+            ->get()
+            ->map(fn ($payment) => [
+                'id' => $payment->id,
+                'payment_date' => $payment->payment_date->toDateString(),
+                'amount' => (float) $payment->amount,
+                'entry_type' => $payment->entry_type->value,
+                'method' => $payment->method->value,
+                'reference' => $payment->reference,
+                'notes' => $payment->notes,
+                'recorded_by' => $payment->recorder?->name,
+                'employee_name' => $payment->membership?->user?->name,
+            ]);
+
+        return response()->json(['data' => $payments]);
+    }
+
+    /**
      * Display-only summary: never let a bad calculation take the page down —
      * log it and fall back to a safe default. pay()/writeOffLoan() below must
      * NOT use this — they need the real, accurate summary to validate amounts.

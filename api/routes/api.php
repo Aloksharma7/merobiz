@@ -121,6 +121,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::delete('/team/{membership}/salary/payments/{payment}', [SalaryController::class, 'destroy'])->withoutScopedBindings();
             Route::post('/team/{membership}/salary/write-off', [SalaryController::class, 'writeOffLoan']);
             Route::get('/my-salary', [SalaryController::class, 'mine']);
+            Route::get('/payroll-payments', [SalaryController::class, 'businessIndex']);
 
             Route::get('/ownerships', [OwnershipController::class, 'index']);
             Route::post('/ownerships', [OwnershipController::class, 'store']);

@@ -76,6 +76,11 @@ class Business extends Model
         return $this->hasMany(Expense::class);
     }
 
+    public function salaryPayments(): HasMany
+    {
+        return $this->hasMany(SalaryPayment::class);
+    }
+
     public function profitPeriods(): HasMany
     {
         return $this->hasMany(ProfitPeriod::class);
