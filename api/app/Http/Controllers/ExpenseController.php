@@ -29,9 +29,14 @@ class ExpenseController extends Controller
         $canManage = $membership->allows('expenses.manage');
         abort_unless($canManage || $membership->allows('expenses.create'), 403);
 
+        // Thesis/installment businesses already share project, writer and sales
+        // visibility company-wide (see DashboardService's canViewAllSales) — normal
+        // operating expenses follow the same "the whole small team sees it" rule
+        // there. A standard business keeps the tighter default: only expenses.manage
+        // sees everyone else's; anyone else only sees what they personally submitted.
         $expenses = $business->expenses()
             ->with(['submitter:id,name', 'approver:id,name'])
-            ->when(! $canManage, fn ($query) => $query->where('submitted_by', $request->user()->id))
+            ->when(! $canManage && ! $business->isInstallment(), fn ($query) => $query->where('submitted_by', $request->user()->id))
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $search = trim((string) $request->query('search'));
                 $query->where(function ($nested) use ($search): void {
