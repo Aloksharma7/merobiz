@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-export function PaymentFormModal({ businessId, invoice, open, onClose, currency }: { businessId: string | number; invoice: Invoice | null; open: boolean; onClose: () => void; currency: string }) {
+export function PaymentFormModal({ businessId, invoice, payment, open, onClose, currency }: { businessId: string | number; invoice: Invoice | null; payment?: Payment | null; open: boolean; onClose: () => void; currency: string }) {
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("qr");
@@ -29,10 +29,32 @@ export function PaymentFormModal({ businessId, invoice, open, onClose, currency 
   });
   const current = freshQuery.data ?? invoice;
 
-  useEffect(() => { if (open && invoice) { setDate(today()); setMethod("qr"); setReference(""); setNotes(""); setErrors({}); } }, [invoice, open]);
-  useEffect(() => { if (open && current) setAmount(String(current.balance_amount)); }, [open, current?.balance_amount]);
+  useEffect(() => {
+    if (!open || !invoice) return;
+    if (payment) {
+      setDate(payment.payment_date);
+      setAmount(String(payment.amount));
+      setMethod(payment.method);
+      setReference(payment.reference ?? "");
+      setNotes(payment.notes ?? "");
+    } else {
+      setDate(today());
+      setMethod("qr");
+      setReference("");
+      setNotes("");
+    }
+    setErrors({});
+  }, [invoice, payment, open]);
+  useEffect(() => { if (open && current && !payment) setAmount(String(current.balance_amount)); }, [open, payment, current?.balance_amount]);
+
   const mutation = useMutation({
-    mutationFn: async () => (await api.post<ApiMessage<{ payment: Payment }>>(`/businesses/${businessId}/invoices/${invoice?.id}/payments`, { payment_date: date, amount: Number(amount), method, reference: reference || null, notes: notes || null })).data,
+    mutationFn: async () => {
+      const body = { payment_date: date, amount: Number(amount), method, reference: reference || null, notes: notes || null };
+      const response = payment
+        ? await api.patch<ApiMessage<{ payment: Payment }>>(`/businesses/${businessId}/invoices/${invoice?.id}/payments/${payment.id}`, body)
+        : await api.post<ApiMessage<{ payment: Payment }>>(`/businesses/${businessId}/invoices/${invoice?.id}/payments`, body);
+      return response.data;
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["invoices", String(businessId)] }),
@@ -44,12 +66,12 @@ export function PaymentFormModal({ businessId, invoice, open, onClose, currency 
         queryClient.invalidateQueries({ queryKey: ["customers", String(businessId)] }),
         queryClient.invalidateQueries({ queryKey: ["customer", String(businessId)] }),
       ]);
-      toast.success("Payment recorded", { description: `${invoice?.invoice_number} balance updated.` });
+      toast.success(payment ? "Payment updated" : "Payment recorded", { description: `${invoice?.invoice_number} balance updated.` });
       onClose();
     },
     onError: (error) => {
       setErrors(fieldErrors(error));
-      toast.error("Could not record payment", { description: apiError(error) });
+      toast.error(payment ? "Could not update payment" : "Could not record payment", { description: apiError(error) });
       // The balance may have just changed (another payment recorded elsewhere) — refresh it.
       void queryClient.invalidateQueries({ queryKey: ["invoices", String(businessId)] });
       void queryClient.invalidateQueries({ queryKey: ["invoice", String(businessId), invoice?.id] });
@@ -57,12 +79,12 @@ export function PaymentFormModal({ businessId, invoice, open, onClose, currency 
   });
   if (!invoice || !current) return null;
   return (
-    <Modal open={open} onClose={onClose} title="Record payment" description={`${current.invoice_number} · ${current.customer_name || current.customer?.name || "Walk-in customer"}`} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="payment-form" loading={mutation.isPending}>Record payment</Button></>}>
+    <Modal open={open} onClose={onClose} title={payment ? "Edit payment" : "Record payment"} description={`${current.invoice_number} · ${current.customer_name || current.customer?.name || "Walk-in customer"}`} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" form="payment-form" loading={mutation.isPending}>{payment ? "Save changes" : "Record payment"}</Button></>}>
       <form id="payment-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4">
         <div className="rounded-2xl bg-[var(--surface-soft)] p-4"><div className="flex items-center justify-between text-sm"><span className="text-[var(--ink-soft)]">Outstanding balance</span><strong className="text-lg font-black">{money(current.balance_amount, currency)}</strong></div></div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldShell label="Payment date" htmlFor="payment-date" error={errors.payment_date?.[0]} required><Input id="payment-date" type="date" min={current.invoice_date} max={today()} value={date} onChange={(event) => setDate(event.target.value)} required /></FieldShell>
-          <FieldShell label="Amount received" htmlFor="payment-amount" error={errors.amount?.[0]} required><Input id="payment-amount" type="number" min="0.01" max={current.balance_amount} step="0.01" placeholder="0.00" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldShell>
+          <FieldShell label="Amount received" htmlFor="payment-amount" error={errors.amount?.[0]} required><Input id="payment-amount" type="number" min="0.01" step="0.01" placeholder="0.00" value={amount} onChange={(event) => setAmount(event.target.value)} required /></FieldShell>
           <FieldShell label="Method" htmlFor="payment-method" error={errors.method?.[0]} required><Select id="payment-method" value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}><option value="qr">QR payment</option><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option><option value="wallet">Digital wallet</option><option value="card">Card</option><option value="cheque">Cheque</option><option value="other">Other</option></Select></FieldShell>
           <FieldShell label="Reference" htmlFor="payment-reference" error={errors.reference?.[0]}><Input id="payment-reference" value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Transaction or cheque number" /></FieldShell>
         </div>

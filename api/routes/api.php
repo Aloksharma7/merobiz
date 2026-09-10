@@ -94,6 +94,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel']);
             Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy']);
             Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store']);
+            Route::patch('/invoices/{invoice}/payments/{payment}', [PaymentController::class, 'update']);
+            Route::delete('/invoices/{invoice}/payments/{payment}', [PaymentController::class, 'destroy']);
             Route::get('/invoices/{invoice}/installments', [InvoiceInstallmentController::class, 'index']);
             Route::put('/invoices/{invoice}/installments', [InvoiceInstallmentController::class, 'store']);
             Route::get('/invoices/{invoice}/items/{item}/writers', [InvoiceItemWriterController::class, 'index']);
@@ -138,6 +140,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('/profit-periods', [ProfitPeriodController::class, 'store']);
             Route::get('/profit-distributions', [ProfitDistributionController::class, 'index']);
             Route::post('/profit-distributions', [ProfitDistributionController::class, 'store']);
+            Route::patch('/profit-distributions/{distribution}', [ProfitDistributionController::class, 'update'])->withoutScopedBindings();
+            Route::delete('/profit-distributions/{distribution}', [ProfitDistributionController::class, 'destroy'])->withoutScopedBindings();
             Route::get('/profit-withdrawals', [ProfitWithdrawalController::class, 'index']);
             Route::post('/profit-withdrawals', [ProfitWithdrawalController::class, 'store']);
             Route::delete('/profit-withdrawals/{withdrawal}', [ProfitWithdrawalController::class, 'destroy'])->withoutScopedBindings();

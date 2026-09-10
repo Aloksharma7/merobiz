@@ -6,6 +6,7 @@ use App\Enums\BusinessRole;
 use App\Http\Requests\StoreProfitDistributionRequest;
 use App\Http\Resources\ProfitDistributionResource;
 use App\Models\Business;
+use App\Models\ProfitDistribution;
 use App\Services\ProfitDistributionService;
 use App\Support\AuthorizesBusinessActions;
 use Illuminate\Http\JsonResponse;
@@ -41,5 +42,30 @@ class ProfitDistributionController extends Controller
             'message' => 'Profit distribution recorded.',
             'distribution' => new ProfitDistributionResource($distribution),
         ], 201);
+    }
+
+    public function update(StoreProfitDistributionRequest $request, Business $business, ProfitDistribution $distribution): JsonResponse
+    {
+        $membership = $this->membership($request);
+        abort_unless(in_array($membership->role, [BusinessRole::Owner, BusinessRole::Admin], true), 403);
+        abort_unless($distribution->business_id === $business->id, 404);
+
+        $updated = $this->distributions->updateDistribution($business, $distribution, $request->user(), $request->validated());
+
+        return response()->json([
+            'message' => 'Profit distribution updated.',
+            'distribution' => new ProfitDistributionResource($updated),
+        ]);
+    }
+
+    public function destroy(Request $request, Business $business, ProfitDistribution $distribution): JsonResponse
+    {
+        $membership = $this->membership($request);
+        abort_unless(in_array($membership->role, [BusinessRole::Owner, BusinessRole::Admin], true), 403);
+        abort_unless($distribution->business_id === $business->id, 404);
+
+        $this->distributions->deleteDistribution($business, $distribution, $request->user());
+
+        return response()->json(['message' => 'Profit distribution deleted.']);
     }
 }
