@@ -298,11 +298,13 @@ class InvoiceService
                 'description' => (string) $item['description'],
                 'quantity' => Decimal::of($item['quantity']),
                 'unit_price' => Decimal::of($item['unit_price']),
-                // Product cost is authoritative for employee sales. Owners/admins may use
-                // an explicit cost only for a custom invoice line.
-                'cost_price' => $product
+                // Product cost is authoritative for employee sales — they can't see or
+                // set it from the browser. Whoever can manage the catalogue may override
+                // it per line (e.g. this particular unit cost more than usual), same as
+                // the tax_rate override just below.
+                'cost_price' => $product && ! $canManageCatalogue
                     ? Decimal::of($product->cost_price)
-                    : Decimal::of(Arr::get($item, 'unit_cost', 0)),
+                    : Decimal::of(Arr::get($item, 'unit_cost', $product?->cost_price ?? 0)),
                 'line_discount' => Decimal::of(Arr::get($item, 'discount_amount', 0)),
                 // Employees cannot alter a catalogue item's tax rule from the browser.
                 'tax_rate' => $product && ! $canManageCatalogue

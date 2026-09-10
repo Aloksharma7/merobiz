@@ -67,11 +67,9 @@ class SaleVerificationTest extends TestCase
                 'description' => $product->name,
                 'quantity' => 1,
                 'unit_price' => 1000,
-                // A catalogue line's cost always comes from the product regardless of
-                // role — only a custom line with no product can set an explicit cost.
-                // Tax, however, is trusted from the request once the actor can manage
-                // the catalogue (employees now can, same as admins).
-                'unit_cost' => 1,
+                // No unit_cost override — this test is about employee-sale visibility
+                // and commission, not cost overriding (see InvoiceCostOverrideTest for
+                // that), so it should just fall back to the product's own cost.
                 'discount_amount' => 0,
                 'tax_rate' => 0,
             ]],
