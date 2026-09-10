@@ -83,6 +83,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::apiResource('products', ProductController::class)->except(['show']);
             Route::apiResource('writers', WriterController::class);
             Route::post('/writers/{writer}/payments', [WriterPaymentController::class, 'store']);
+            Route::get('/writer-payments', [WriterPaymentController::class, 'businessIndex']);
 
             Route::get('/invoices', [InvoiceController::class, 'index']);
             Route::get('/invoices/export', [InvoiceController::class, 'export']);

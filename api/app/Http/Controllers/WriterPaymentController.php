@@ -10,6 +10,7 @@ use App\Services\AuditService;
 use App\Support\AuthorizesBusinessActions;
 use App\Support\Decimal;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -18,6 +19,34 @@ class WriterPaymentController extends Controller
     use AuthorizesBusinessActions;
 
     public function __construct(private readonly AuditService $audit) {}
+
+    /**
+     * Every writer payment across the whole business — shown alongside
+     * expenses (see SalaryController::businessIndex() for the same pattern
+     * with payroll) so the real cost of running the business is visible in
+     * one place instead of split across per-writer/per-project views.
+     */
+    public function businessIndex(Request $request, Business $business): JsonResponse
+    {
+        $this->requirePermission($request, 'writers.manage');
+
+        $payments = $business->writerPayments()
+            ->with(['writer:id,name', 'project:id,topic', 'recorder:id,name'])
+            ->latest('paid_on')
+            ->latest('id')
+            ->get()
+            ->map(fn ($payment) => [
+                'id' => $payment->id,
+                'paid_on' => $payment->paid_on->toDateString(),
+                'amount' => (float) $payment->amount,
+                'notes' => $payment->notes,
+                'recorded_by' => $payment->recorder?->name,
+                'writer_name' => $payment->writer?->name,
+                'project_topic' => $payment->project?->topic,
+            ]);
+
+        return response()->json(['data' => $payments]);
+    }
 
     public function store(StoreWriterPaymentRequest $request, Business $business, Writer $writer): JsonResponse
     {

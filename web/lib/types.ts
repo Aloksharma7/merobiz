@@ -482,6 +482,16 @@ export type MySalary = { visible: false; outstanding_loan: number } | ({ visible
 
 export type PayrollPaymentRecord = SalaryPaymentRecord & { employee_name?: string | null };
 
+export type WriterPaymentRecord = {
+  id: number;
+  paid_on: string;
+  amount: number;
+  notes?: string | null;
+  recorded_by?: string | null;
+  writer_name?: string | null;
+  project_topic?: string | null;
+};
+
 export type ProfitAllocation = {
   id: number;
   user_id: number;

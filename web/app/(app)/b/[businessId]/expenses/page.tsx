@@ -13,11 +13,11 @@ import { PageHeader } from "@/components/ui/page-header";
 import { api, apiError, downloadFile } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useBusinesses } from "@/lib/business-context";
-import type { ApiMessage, Expense, ExpenseStatus, Paginated, PayrollPaymentRecord, ProfitWithdrawalRecord } from "@/lib/types";
+import type { ApiMessage, Expense, ExpenseStatus, Paginated, PayrollPaymentRecord, ProfitWithdrawalRecord, WriterPaymentRecord } from "@/lib/types";
 import { humanize, money, prettyDate } from "@/lib/utils";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isToday, parseISO } from "date-fns";
-import { Banknote, Check, Clock3, Download, HandCoins, Pencil, Plus, Receipt, Search, Trash2, WalletCards, X } from "lucide-react";
+import { Banknote, Check, Clock3, Download, HandCoins, PenSquare, Pencil, Plus, Receipt, Search, Trash2, WalletCards, X } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ function ExpensesPageContent() {
   const canCreate = canManage || can(business, "expenses.create");
   const canViewFinancials = can(business, "dashboard.financial");
   const canViewPayroll = can(business, "team.manage");
+  const canViewWriterPayments = Boolean(business?.is_installment) && can(business, "writers.manage");
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -75,6 +76,11 @@ function ExpensesPageContent() {
     queryKey: ["payroll-payments", businessId],
     queryFn: async () => (await api.get<{ data: PayrollPaymentRecord[] }>(`/businesses/${businessId}/payroll-payments`)).data.data,
     enabled: canViewPayroll,
+  });
+  const writerPaymentsQuery = useQuery({
+    queryKey: ["writer-payments", businessId],
+    queryFn: async () => (await api.get<{ data: WriterPaymentRecord[] }>(`/businesses/${businessId}/writer-payments`)).data.data,
+    enabled: canViewWriterPayments,
   });
 
   const statusMutation = useMutation({
@@ -135,6 +141,14 @@ function ExpensesPageContent() {
           {payrollQuery.isLoading ? <TableLoading /> : payrollQuery.data?.length ? (
             <div className="divide-y divide-[var(--line)]">{payrollQuery.data.map((payment) => <div key={payment.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><div className="flex items-center gap-2"><Badge tone={payment.entry_type === "write_off" ? "success" : payment.entry_type === "loan" ? "warning" : payment.entry_type === "advance" ? "info" : "neutral"}>{payment.entry_type === "write_off" ? "Settled" : humanize(payment.entry_type)}</Badge><p className="text-sm font-bold">{prettyDate(payment.payment_date)}{payment.employee_name ? ` · ${payment.employee_name}` : ""}</p></div>{payment.notes ? <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{payment.notes}</p> : null}</div><p className="shrink-0 font-black">{money(payment.amount, business.currency)}</p></div>)}</div>
           ) : <EmptyState icon={HandCoins} title="Nothing paid yet" description="Payroll payments made from the Team page show up here." />}
+        </Card>
+      ) : null}
+      {canViewWriterPayments ? (
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-[var(--line)] p-4"><PenSquare size={16} className="text-[var(--brand)]" /><h2 className="font-extrabold">Writer payments</h2><p className="ml-1 text-xs text-[var(--ink-soft)]">Paid to writers for delivered work — a real cost, tracked separately from expenses on each writer's page.</p></div>
+          {writerPaymentsQuery.isLoading ? <TableLoading /> : writerPaymentsQuery.data?.length ? (
+            <div className="divide-y divide-[var(--line)]">{writerPaymentsQuery.data.map((payment) => <div key={payment.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm font-bold">{prettyDate(payment.paid_on)}{payment.writer_name ? ` · ${payment.writer_name}` : ""}</p><p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{[payment.project_topic, payment.notes].filter(Boolean).join(" · ") || "—"}</p></div><p className="shrink-0 font-black">{money(payment.amount, business.currency)}</p></div>)}</div>
+          ) : <EmptyState icon={PenSquare} title="Nothing paid yet" description="Writer payments made from a project or writer page show up here." />}
         </Card>
       ) : null}
       <ExpenseFormModal businessId={businessId} open={canCreate && open} onClose={() => setOpen(false)} isInstallment={business.is_installment} />
