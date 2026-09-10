@@ -15,19 +15,21 @@ import { PROJECT_WORK_STATUSES } from "@/lib/project-status";
 import type { Paginated, Project, ProjectWorkStatus, Writer } from "@/lib/types";
 import { money, prettyDate, today } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CircleDollarSign, HandCoins, PenTool, Plus, ReceiptText, Trash2, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CircleDollarSign, HandCoins, PenTool, Plus, ReceiptText, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export default function ProjectDetailPage() {
   const { businessId, projectId } = useParams<{ businessId: string; projectId: string }>();
+  const router = useRouter();
   const { getBusiness, can } = useBusinesses();
   const business = getBusiness(businessId);
   const canManage = can(business, "writers.manage");
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [approvedOn, setApprovedOn] = useState(today());
   const [profitAmount, setProfitAmount] = useState("");
   const [profitNotes, setProfitNotes] = useState("");
@@ -80,6 +82,16 @@ export default function ProjectDetailPage() {
     mutationFn: async (refundId: number) => api.delete(`/businesses/${businessId}/projects/${projectId}/refunds/${refundId}`),
     onSuccess: async () => { await invalidate(); toast.success("Refund undone"); },
     onError: (error) => toast.error("Could not undo this refund", { description: apiError(error) }),
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async () => api.delete(`/businesses/${businessId}/projects/${projectId}`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["projects", businessId] });
+      toast.success("Project permanently deleted");
+      router.replace(`/b/${businessId}/projects`);
+    },
+    onError: (error) => toast.error("Could not delete this project", { description: apiError(error) }),
   });
 
   const writerMutation = useMutation({
@@ -303,6 +315,24 @@ export default function ProjectDetailPage() {
           <CardBody><EmptyState icon={HandCoins} title="No sale created yet" description="The deal amount stays fully due until a sale is recorded for this project." action={canManage ? <Link href={`/b/${businessId}/sales?project=${project.id}`}><Button leftIcon={<Plus size={16} />}>Record payment</Button></Link> : undefined} /></CardBody>
         )}
       </Card>
+
+      {canManage ? (
+        <Card className="border-[var(--danger)]/30">
+          <CardHeader title={<span className="flex items-center gap-2 text-[var(--danger)]"><AlertTriangle size={18} />Danger zone</span>} description="This cannot be undone." />
+          <CardBody className="space-y-3">
+            <p className="text-sm leading-6 text-[var(--ink-soft)]">
+              Permanently deletes <strong>{project.client_name}</strong>&apos;s file — its writer assignment history, profit approvals and refunds all go with it.
+              {project.invoices?.length ? " Any sale already recorded for this project stays in Sales, just no longer linked to this file." : null}
+            </p>
+            <FieldShell label={`Type "${project.client_name}" to confirm`} htmlFor="delete-project-confirm">
+              <Input id="delete-project-confirm" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} placeholder={project.client_name} />
+            </FieldShell>
+            <Button type="button" variant="danger" leftIcon={<Trash2 size={16} />} disabled={deleteConfirmation !== project.client_name} loading={deleteProjectMutation.isPending} onClick={() => deleteProjectMutation.mutate()}>
+              Delete this project permanently
+            </Button>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <ProjectFormModal businessId={businessId} open={editOpen} project={project} onClose={() => setEditOpen(false)} currency={business.currency} />
     </div>

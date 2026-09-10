@@ -142,6 +142,17 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * A genuine permanent delete, not the soft-delete "archive" the model
+     * would otherwise do — forceDelete() actually fires the SQL DELETE, which
+     * is what makes the project's own child records cascade away with it:
+     * writer assignment history, profit approvals, and refunds (their foreign
+     * keys are cascadeOnDelete, since none of that means anything once the
+     * project itself is gone). Invoices are deliberately excluded from that
+     * cascade at the schema level (nullOnDelete) — a sale and the payments
+     * against it are real money records and are never destroyed by this;
+     * they stay in Sales, just no longer linked to this project.
+     */
     public function destroy(Request $request, Business $business, Project $project): JsonResponse
     {
         $this->requirePermission($request, 'writers.manage');
@@ -149,10 +160,10 @@ class ProjectController extends Controller
         $this->assertBusiness($business, $project);
 
         $before = $project->toArray();
-        $project->delete();
-        $this->audit->record($request->user(), $business, 'project.archived', $project, $before, null, $request);
+        $project->forceDelete();
+        $this->audit->record($request->user(), $business, 'project.deleted', $project, $before, null, $request);
 
-        return response()->json(['message' => 'Project archived.']);
+        return response()->json(['message' => 'Project permanently deleted.']);
     }
 
     /** @param array<string, mixed> $data */
