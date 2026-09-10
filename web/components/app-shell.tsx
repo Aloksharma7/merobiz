@@ -192,6 +192,30 @@ function Shell({ children }: { children: ReactNode }) {
     document.title = `${pageTitle} · MeroBiz`;
   }, [activeBusiness, employeeWorkspace, pageTitle, pathname]);
 
+  // An employee is permanently locked to one business, so "Add to Home Screen"
+  // should install that business's own name and icon, not MeroBiz — everyone
+  // else (owner/admin, who move between businesses) keeps the default MeroBiz
+  // identity regardless of which business page they happen to be viewing.
+  // Swapped here rather than server-rendered because it depends on the
+  // logged-in workspace, which only resolves client-side after /auth/me.
+  useEffect(() => {
+    const manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    const appleIconLink = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+    if (!manifestLink || !appleIconLink) return;
+    // Remembers what Next.js originally server-rendered (the default MeroBiz
+    // manifest/icon paths) so switching back doesn't require guessing them.
+    const defaultManifestHref = manifestLink.dataset.defaultHref ??= manifestLink.href;
+    const defaultAppleIconHref = appleIconLink.dataset.defaultHref ??= appleIconLink.href;
+
+    if (employeeWorkspace && assignedBusinessId) {
+      manifestLink.href = `/manifest-business/${assignedBusinessId}`;
+      appleIconLink.href = `/business-icon/${assignedBusinessId}?size=180`;
+    } else {
+      manifestLink.href = defaultManifestHref;
+      appleIconLink.href = defaultAppleIconHref;
+    }
+  }, [employeeWorkspace, assignedBusinessId]);
+
   function switchBusiness(value: string) {
     if (!value) {
       if (!employeeWorkspace) router.push("/");

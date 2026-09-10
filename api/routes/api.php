@@ -33,6 +33,7 @@ use App\Http\Controllers\WriterSelfController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/public/businesses/{business}/logo', [BusinessController::class, 'logo']);
+Route::get('/public/businesses/{business}/brand', [BusinessController::class, 'publicBrand']);
 Route::get('/public/users/{user}/signature', [SignatureController::class, 'show']);
 
 Route::prefix('auth')->middleware('throttle:10,1')->group(function (): void {

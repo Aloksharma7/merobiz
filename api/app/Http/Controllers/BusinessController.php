@@ -142,6 +142,28 @@ class BusinessController extends Controller
         ]);
     }
 
+    /**
+     * Just enough identity (name, colors, whether a logo exists) to generate
+     * this business's "Add to Home Screen" install icon and name for an
+     * employee locked to this one workspace — see AppShell's manifest swap.
+     * No more sensitive than the logo image itself, already public above.
+     */
+    public function publicBrand(Business $business): JsonResponse
+    {
+        $settings = $business->settings ?? [];
+        $hasLogo = (bool) data_get($settings, 'branding.logo_path');
+
+        return response()->json([
+            'name' => $business->name,
+            'code' => $business->code,
+            'logo_url' => $hasLogo
+                ? url('/api/public/businesses/'.$business->id.'/logo?v='.($business->updated_at?->timestamp ?? time()))
+                : null,
+            'primary_color' => data_get($settings, 'branding.primary_color'),
+            'nav_color' => data_get($settings, 'branding.nav_color'),
+        ]);
+    }
+
     public function update(UpdateBusinessRequest $request, Business $business): JsonResponse
     {
         $this->requirePermission($request, 'business.update');
