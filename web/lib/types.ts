@@ -480,10 +480,11 @@ export type SalarySummary = {
 
 export type MySalary = { visible: false; outstanding_loan: number } | ({ visible: true; payments?: SalaryPaymentRecord[] } & SalarySummary);
 
-export type PayrollPaymentRecord = SalaryPaymentRecord & { employee_name?: string | null };
+export type PayrollPaymentRecord = SalaryPaymentRecord & { membership_id: number; employee_name?: string | null };
 
 export type WriterPaymentRecord = {
   id: number;
+  writer_id: number;
   paid_on: string;
   amount: number;
   notes?: string | null;
@@ -525,6 +526,7 @@ export type ProfitPeriod = {
 
 export type ProfitWithdrawalRecord = {
   id: number;
+  user_id: number;
   withdrawn_on: string;
   amount: number;
   notes?: string | null;

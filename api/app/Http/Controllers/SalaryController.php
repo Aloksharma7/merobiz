@@ -47,6 +47,7 @@ class SalaryController extends Controller
             ->get()
             ->map(fn ($payment) => [
                 'id' => $payment->id,
+                'membership_id' => $payment->membership_id,
                 'payment_date' => $payment->payment_date->toDateString(),
                 'amount' => (float) $payment->amount,
                 'entry_type' => $payment->entry_type->value,

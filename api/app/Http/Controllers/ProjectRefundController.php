@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreProjectRefundRequest;
 use App\Models\Business;
 use App\Models\Project;
+use App\Models\ProjectRefund;
 use App\Services\AuditService;
 use App\Support\AuthorizesBusinessActions;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class ProjectRefundController extends Controller
@@ -49,5 +51,30 @@ class ProjectRefundController extends Controller
             'message' => 'Refund recorded.',
             'refunded_amount' => round($project->fresh()->refundedAmount(), 2),
         ], 201);
+    }
+
+    /**
+     * Undoes an accidentally recorded refund — same reasoning as
+     * SalaryService::deletePayment(). refundedAmount() is derived by summing
+     * refunds, so deleting one naturally reverses it.
+     */
+    public function destroy(Request $request, Business $business, Project $project, ProjectRefund $refund): JsonResponse
+    {
+        $this->requirePermission($request, 'writers.manage');
+        abort_unless($business->isInstallment(), 422, 'Projects are only available for installment-category businesses.');
+        abort_unless($project->business_id === $business->id, 404);
+        abort_unless($refund->project_id === $project->id, 404);
+
+        if ($business->isDateClosed($refund->refunded_on)) {
+            throw ValidationException::withMessages([
+                'refund' => 'This refund belongs to a closed profit period.',
+            ]);
+        }
+
+        $before = $refund->toArray();
+        $refund->delete();
+        $this->audit->record($request->user(), $business, 'project.refund_deleted', $refund, $before, null, $request);
+
+        return response()->json(['message' => 'Refund deleted.']);
     }
 }

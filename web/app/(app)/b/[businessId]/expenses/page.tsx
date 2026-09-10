@@ -95,6 +95,24 @@ function ExpensesPageContent() {
     onError: (error) => toast.error("Could not delete expense", { description: apiError(error) }),
   });
 
+  const deleteWithdrawalMutation = useMutation({
+    mutationFn: async (id: number) => api.delete(`/businesses/${businessId}/profit-withdrawals/${id}`),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["profit-withdrawals", businessId] }); toast.success("Withdrawal undone"); },
+    onError: (error) => toast.error("Could not undo this withdrawal", { description: apiError(error) }),
+  });
+
+  const deleteWriterPaymentMutation = useMutation({
+    mutationFn: async (payment: WriterPaymentRecord) => api.delete(`/businesses/${businessId}/writers/${payment.writer_id}/payments/${payment.id}`),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["writer-payments", businessId] }); toast.success("Payment undone"); },
+    onError: (error) => toast.error("Could not undo this payment", { description: apiError(error) }),
+  });
+
+  const deletePayrollPaymentMutation = useMutation({
+    mutationFn: async (payment: PayrollPaymentRecord) => api.delete(`/businesses/${businessId}/team/${payment.membership_id}/salary/payments/${payment.id}`),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["payroll-payments", businessId] }); toast.success("Payment undone"); },
+    onError: (error) => toast.error("Could not undo this payment", { description: apiError(error) }),
+  });
+
   const rows = query.data?.data ?? [];
   const summary = rows.reduce((acc, row) => ({ total: acc.total + row.amount, approved: acc.approved + (row.status === "approved" ? row.amount : 0), pending: acc.pending + (row.status === "pending" ? row.amount : 0) }), { total: 0, approved: 0, pending: 0 });
   const canApprove = can(business, "expenses.approve");
@@ -131,7 +149,7 @@ function ExpensesPageContent() {
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-[var(--line)] p-4"><Banknote size={16} className="text-[var(--brand)]" /><h2 className="font-extrabold">Profit taken out</h2><p className="ml-1 text-xs text-[var(--ink-soft)]">Money an owner has withdrawn — real cash out, separate from business expenses.</p></div>
           {withdrawalsQuery.isLoading ? <TableLoading /> : withdrawalsQuery.data?.length ? (
-            <div className="divide-y divide-[var(--line)]">{withdrawalsQuery.data.map((withdrawal) => <div key={withdrawal.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm font-bold">{prettyDate(withdrawal.withdrawn_on)}{withdrawal.user_name ? ` · ${withdrawal.user_name}` : ""}</p>{withdrawal.notes ? <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{withdrawal.notes}</p> : null}</div><p className="shrink-0 font-black">{money(withdrawal.amount, business.currency)}</p></div>)}</div>
+            <div className="divide-y divide-[var(--line)]">{withdrawalsQuery.data.map((withdrawal) => <div key={withdrawal.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm font-bold">{prettyDate(withdrawal.withdrawn_on)}{withdrawal.user_name ? ` · ${withdrawal.user_name}` : ""}</p>{withdrawal.notes ? <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{withdrawal.notes}</p> : null}</div><div className="flex shrink-0 items-center gap-2"><p className="font-black">{money(withdrawal.amount, business.currency)}</p>{withdrawal.user_id === user?.id || business.full_control ? <button type="button" disabled={deleteWithdrawalMutation.isPending} onClick={() => { if (window.confirm("Undo this withdrawal? This removes it entirely, as if it never happened.")) deleteWithdrawalMutation.mutate(withdrawal.id); }} className="grid h-9 w-9 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40" aria-label="Undo this withdrawal"><Trash2 size={15} /></button> : null}</div></div>)}</div>
           ) : <EmptyState icon={Banknote} title="Nothing withdrawn yet" description="Profit an owner takes out shows up here, separate from business expenses." />}
         </Card>
       ) : null}
@@ -139,7 +157,7 @@ function ExpensesPageContent() {
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-[var(--line)] p-4"><HandCoins size={16} className="text-[var(--brand)]" /><h2 className="font-extrabold">Payroll payments</h2><p className="ml-1 text-xs text-[var(--ink-soft)]">Salary, advances and loans paid to staff — a real cost, tracked separately from expenses on the Team page.</p></div>
           {payrollQuery.isLoading ? <TableLoading /> : payrollQuery.data?.length ? (
-            <div className="divide-y divide-[var(--line)]">{payrollQuery.data.map((payment) => <div key={payment.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><div className="flex items-center gap-2"><Badge tone={payment.entry_type === "write_off" ? "success" : payment.entry_type === "loan" ? "warning" : payment.entry_type === "advance" ? "info" : "neutral"}>{payment.entry_type === "write_off" ? "Settled" : humanize(payment.entry_type)}</Badge><p className="text-sm font-bold">{prettyDate(payment.payment_date)}{payment.employee_name ? ` · ${payment.employee_name}` : ""}</p></div>{payment.notes ? <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{payment.notes}</p> : null}</div><p className="shrink-0 font-black">{money(payment.amount, business.currency)}</p></div>)}</div>
+            <div className="divide-y divide-[var(--line)]">{payrollQuery.data.map((payment) => <div key={payment.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><div className="flex items-center gap-2"><Badge tone={payment.entry_type === "write_off" ? "success" : payment.entry_type === "loan" ? "warning" : payment.entry_type === "advance" ? "info" : "neutral"}>{payment.entry_type === "write_off" ? "Settled" : humanize(payment.entry_type)}</Badge><p className="text-sm font-bold">{prettyDate(payment.payment_date)}{payment.employee_name ? ` · ${payment.employee_name}` : ""}</p></div>{payment.notes ? <p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{payment.notes}</p> : null}</div><div className="flex shrink-0 items-center gap-2"><p className="font-black">{money(payment.amount, business.currency)}</p><button type="button" disabled={deletePayrollPaymentMutation.isPending} onClick={() => { if (window.confirm("Undo this payment? This removes it entirely, as if it never happened.")) deletePayrollPaymentMutation.mutate(payment); }} className="grid h-9 w-9 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40" aria-label="Undo this payment"><Trash2 size={15} /></button></div></div>)}</div>
           ) : <EmptyState icon={HandCoins} title="Nothing paid yet" description="Payroll payments made from the Team page show up here." />}
         </Card>
       ) : null}
@@ -147,7 +165,7 @@ function ExpensesPageContent() {
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-[var(--line)] p-4"><PenSquare size={16} className="text-[var(--brand)]" /><h2 className="font-extrabold">Writer payments</h2><p className="ml-1 text-xs text-[var(--ink-soft)]">Paid to writers for delivered work — a real cost, tracked separately from expenses on each writer's page.</p></div>
           {writerPaymentsQuery.isLoading ? <TableLoading /> : writerPaymentsQuery.data?.length ? (
-            <div className="divide-y divide-[var(--line)]">{writerPaymentsQuery.data.map((payment) => <div key={payment.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm font-bold">{prettyDate(payment.paid_on)}{payment.writer_name ? ` · ${payment.writer_name}` : ""}</p><p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{[payment.project_topic, payment.notes].filter(Boolean).join(" · ") || "—"}</p></div><p className="shrink-0 font-black">{money(payment.amount, business.currency)}</p></div>)}</div>
+            <div className="divide-y divide-[var(--line)]">{writerPaymentsQuery.data.map((payment) => <div key={payment.id} className="flex items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="text-sm font-bold">{prettyDate(payment.paid_on)}{payment.writer_name ? ` · ${payment.writer_name}` : ""}</p><p className="mt-0.5 truncate text-xs text-[var(--ink-soft)]">{[payment.project_topic, payment.notes].filter(Boolean).join(" · ") || "—"}</p></div><div className="flex shrink-0 items-center gap-2"><p className="font-black">{money(payment.amount, business.currency)}</p><button type="button" disabled={deleteWriterPaymentMutation.isPending} onClick={() => { if (window.confirm("Undo this payment? This removes it entirely, as if it never happened.")) deleteWriterPaymentMutation.mutate(payment); }} className="grid h-9 w-9 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40" aria-label="Undo this payment"><Trash2 size={15} /></button></div></div>)}</div>
           ) : <EmptyState icon={PenSquare} title="Nothing paid yet" description="Writer payments made from a project or writer page show up here." />}
         </Card>
       ) : null}

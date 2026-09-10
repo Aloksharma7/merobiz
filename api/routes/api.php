@@ -83,6 +83,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::apiResource('products', ProductController::class)->except(['show']);
             Route::apiResource('writers', WriterController::class);
             Route::post('/writers/{writer}/payments', [WriterPaymentController::class, 'store']);
+            Route::delete('/writers/{writer}/payments/{payment}', [WriterPaymentController::class, 'destroy']);
             Route::get('/writer-payments', [WriterPaymentController::class, 'businessIndex']);
 
             Route::get('/invoices', [InvoiceController::class, 'index']);
@@ -101,7 +102,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::apiResource('projects', ProjectController::class)->except(['show']);
             Route::get('/projects/{project}', [ProjectController::class, 'show']);
             Route::post('/projects/{project}/profit-approvals', [ProjectProfitApprovalController::class, 'store']);
+            Route::delete('/projects/{project}/profit-approvals/{approval}', [ProjectProfitApprovalController::class, 'destroy'])->withoutScopedBindings();
             Route::post('/projects/{project}/refunds', [ProjectRefundController::class, 'store']);
+            Route::delete('/projects/{project}/refunds/{refund}', [ProjectRefundController::class, 'destroy']);
             Route::get('/projects/{project}/writer', [ProjectWriterAssignmentController::class, 'index']);
             Route::post('/projects/{project}/writer', [ProjectWriterAssignmentController::class, 'store']);
 
@@ -137,5 +140,6 @@ Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('/profit-distributions', [ProfitDistributionController::class, 'store']);
             Route::get('/profit-withdrawals', [ProfitWithdrawalController::class, 'index']);
             Route::post('/profit-withdrawals', [ProfitWithdrawalController::class, 'store']);
+            Route::delete('/profit-withdrawals/{withdrawal}', [ProfitWithdrawalController::class, 'destroy'])->withoutScopedBindings();
         });
 });

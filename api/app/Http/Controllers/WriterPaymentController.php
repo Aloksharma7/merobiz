@@ -6,6 +6,7 @@ use App\Http\Requests\StoreWriterPaymentRequest;
 use App\Models\Business;
 use App\Models\Project;
 use App\Models\Writer;
+use App\Models\WriterPayment;
 use App\Services\AuditService;
 use App\Support\AuthorizesBusinessActions;
 use App\Support\Decimal;
@@ -37,6 +38,7 @@ class WriterPaymentController extends Controller
             ->get()
             ->map(fn ($payment) => [
                 'id' => $payment->id,
+                'writer_id' => $payment->writer_id,
                 'paid_on' => $payment->paid_on->toDateString(),
                 'amount' => (float) $payment->amount,
                 'notes' => $payment->notes,
@@ -91,5 +93,30 @@ class WriterPaymentController extends Controller
             'writer_paid_amount' => round($project->fresh()->writerPaidAmount(), 2),
             'writer_due_amount' => round($project->fresh()->writerDueAmount(), 2),
         ], 201);
+    }
+
+    /**
+     * Undoes an accidentally recorded writer payment — same reasoning as
+     * SalaryService::deletePayment(). writerPaidAmount()/writerDueAmount() are
+     * derived by summing payments, so deleting one naturally reverses both,
+     * no separate bookkeeping needed.
+     */
+    public function destroy(Request $request, Business $business, Writer $writer, WriterPayment $payment): JsonResponse
+    {
+        $this->requirePermission($request, 'writers.manage');
+        abort_unless($writer->business_id === $business->id, 404);
+        abort_unless($payment->writer_id === $writer->id, 404);
+
+        if ($business->isDateClosed($payment->paid_on)) {
+            throw ValidationException::withMessages([
+                'payment' => 'This payment belongs to a closed profit period.',
+            ]);
+        }
+
+        $before = $payment->toArray();
+        $payment->delete();
+        $this->audit->record($request->user(), $business, 'writer.payment_deleted', $payment, $before, null, $request);
+
+        return response()->json(['message' => 'Payment deleted.']);
     }
 }

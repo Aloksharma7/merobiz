@@ -10,15 +10,16 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { PageLoading } from "@/components/ui/loading";
 import { PageHeader } from "@/components/ui/page-header";
-import { api } from "@/lib/api";
+import { api, apiError } from "@/lib/api";
 import { useBusinesses } from "@/lib/business-context";
 import type { WriterProfile } from "@/lib/types";
 import { money, prettyDate, shortTopic } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Briefcase, CircleDollarSign, FolderKanban, Mail, Phone, Plus, Wallet2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Briefcase, CircleDollarSign, FolderKanban, Mail, Phone, Plus, Trash2, Wallet2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export default function WriterDetailPage() {
   const { businessId, writerId } = useParams<{ businessId: string; writerId: string }>();
@@ -28,11 +29,18 @@ export default function WriterDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [range, setRange] = useState<DateRangeValue>(defaultRange);
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: ["writer", businessId, writerId, range],
     queryFn: async () => (await api.get<WriterProfile>(`/businesses/${businessId}/writers/${writerId}`, { params: range })).data,
     enabled: Boolean(business),
+  });
+
+  const deletePaymentMutation = useMutation({
+    mutationFn: async (paymentId: number) => api.delete(`/businesses/${businessId}/writers/${writerId}/payments/${paymentId}`),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["writer", businessId, writerId] }); toast.success("Payment undone"); },
+    onError: (error) => toast.error("Could not undo this payment", { description: apiError(error) }),
   });
 
   if (!business || query.isLoading) return <PageLoading />;
@@ -84,14 +92,27 @@ export default function WriterDetailPage() {
         {payments.length ? (
           <div className="divide-y divide-[var(--line)]">
             {payments.map((payment) => (
-              <Link href={`/b/${businessId}/projects/${payment.project_id}`} key={payment.id} className="flex items-center gap-3 px-5 py-3.5 text-sm hover:bg-[var(--surface-soft)]">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><Wallet2 size={16} /></span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">{payment.client_name ?? "File"}</p>
-                  <p className="text-xs text-[var(--ink-soft)]">{prettyDate(payment.paid_on)}{payment.notes ? ` · ${payment.notes}` : ""}</p>
-                </div>
+              <div key={payment.id} className="flex items-center gap-3 px-5 py-3.5 text-sm hover:bg-[var(--surface-soft)]">
+                <Link href={`/b/${businessId}/projects/${payment.project_id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><Wallet2 size={16} /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-bold">{payment.client_name ?? "File"}</p>
+                    <p className="text-xs text-[var(--ink-soft)]">{prettyDate(payment.paid_on)}{payment.notes ? ` · ${payment.notes}` : ""}</p>
+                  </div>
+                </Link>
                 <p className="font-black">{money(payment.amount, currency)}</p>
-              </Link>
+                {canManage ? (
+                  <button
+                    type="button"
+                    disabled={deletePaymentMutation.isPending}
+                    onClick={() => { if (window.confirm("Undo this payment? This removes it entirely, as if it never happened.")) deletePaymentMutation.mutate(payment.id); }}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40"
+                    aria-label="Undo this payment"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                ) : null}
+              </div>
             ))}
           </div>
         ) : <CardBody><EmptyState icon={Wallet2} title="No payments in this period" description="Payments made to this writer in the selected range will show up here." /></CardBody>}

@@ -15,7 +15,7 @@ import { PROJECT_WORK_STATUSES } from "@/lib/project-status";
 import type { Paginated, Project, ProjectWorkStatus, Writer } from "@/lib/types";
 import { money, prettyDate, today } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CircleDollarSign, HandCoins, PenTool, Plus, ReceiptText, Undo2 } from "lucide-react";
+import { ArrowLeft, CircleDollarSign, HandCoins, PenTool, Plus, ReceiptText, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -68,6 +68,18 @@ export default function ProjectDetailPage() {
     mutationFn: async () => (await api.post(`/businesses/${businessId}/projects/${projectId}/refunds`, { refunded_on: refundedOn, amount: Number(refundAmount), notes: refundNotes || null })).data,
     onSuccess: async () => { await invalidate(); setRefundAmount(""); setRefundNotes(""); toast.success("Refund recorded"); },
     onError: (error) => { setErrors(fieldErrors(error)); toast.error("Could not record refund", { description: apiError(error) }); },
+  });
+
+  const deleteApprovalMutation = useMutation({
+    mutationFn: async (approvalId: number) => api.delete(`/businesses/${businessId}/projects/${projectId}/profit-approvals/${approvalId}`),
+    onSuccess: async () => { await invalidate(); toast.success("Profit approval undone"); },
+    onError: (error) => toast.error("Could not undo this approval", { description: apiError(error) }),
+  });
+
+  const deleteRefundMutation = useMutation({
+    mutationFn: async (refundId: number) => api.delete(`/businesses/${businessId}/projects/${projectId}/refunds/${refundId}`),
+    onSuccess: async () => { await invalidate(); toast.success("Refund undone"); },
+    onError: (error) => toast.error("Could not undo this refund", { description: apiError(error) }),
   });
 
   const writerMutation = useMutation({
@@ -180,7 +192,18 @@ export default function ProjectDetailPage() {
                   {project.profit_approvals.map((approval) => (
                     <div key={approval.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-3 text-sm">
                       <span>{prettyDate(approval.approved_on)}{approval.notes ? ` · ${approval.notes}` : ""}</span>
-                      <span className="font-black">{money(approval.amount, currency)}</span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="font-black">{money(approval.amount, currency)}</span>
+                        <button
+                          type="button"
+                          disabled={deleteApprovalMutation.isPending}
+                          onClick={() => { if (window.confirm("Undo this profit approval? This removes it entirely, as if it never happened.")) deleteApprovalMutation.mutate(approval.id); }}
+                          className="grid h-8 w-8 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40"
+                          aria-label="Undo this profit approval"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -210,7 +233,18 @@ export default function ProjectDetailPage() {
                 {project.refunds.map((refund) => (
                   <div key={refund.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--line)] p-3 text-sm">
                     <span>{prettyDate(refund.refunded_on)}{refund.notes ? ` · ${refund.notes}` : ""}</span>
-                    <span className="font-black">{money(refund.amount, currency)}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="font-black">{money(refund.amount, currency)}</span>
+                      <button
+                        type="button"
+                        disabled={deleteRefundMutation.isPending}
+                        onClick={() => { if (window.confirm("Undo this refund? This removes it entirely, as if it never happened.")) deleteRefundMutation.mutate(refund.id); }}
+                        className="grid h-8 w-8 place-items-center rounded-lg text-[var(--ink-soft)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-40"
+                        aria-label="Undo this refund"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
