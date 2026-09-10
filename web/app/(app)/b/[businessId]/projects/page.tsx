@@ -90,7 +90,7 @@ function ProjectsPageContent() {
               {rows.map((project) => (
                 <Link href={`/b/${businessId}/projects/${project.id}`} key={project.id} className="block rounded-2xl border border-[var(--line)] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#b7c8bb] hover:shadow-[0_16px_36px_rgb(17_48_35/0.08)]">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0"><p className="truncate font-bold">{project.client_name}</p><p className="mt-0.5 truncate text-sm font-bold text-[var(--ink-soft)]">{shortTopic(project.topic)}</p></div>
+                    <div className="min-w-0"><p className="truncate font-bold">{project.client_name}</p><p className="mt-0.5 truncate font-bold">{shortTopic(project.topic)}</p></div>
                     <Badge tone={statusTone(project.work_status)}>{project.work_status}</Badge>
                   </div>
                   <p className="mt-2.5 text-xs text-[var(--ink-soft)]">{project.course} · {project.work}</p>

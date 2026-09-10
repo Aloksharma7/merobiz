@@ -114,7 +114,7 @@ function ProjectsList({ rows, currency, showAssignedRange }: { rows: WriterProfi
           <tbody className="divide-y divide-[var(--line)]">
             {rows.map((row) => (
               <tr key={row.id}>
-                <td className="px-5 py-3.5"><p className="block max-w-[220px] truncate font-bold">{row.client_name}</p><p className="mt-0.5 max-w-[220px] truncate text-sm font-bold text-[var(--ink-soft)]">{shortTopic(row.topic)}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p></td>
+                <td className="px-5 py-3.5"><p className="block max-w-[220px] truncate font-bold">{row.client_name}</p><p className="mt-0.5 max-w-[220px] truncate font-bold">{shortTopic(row.topic)}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p></td>
                 <td className="px-4 py-3.5"><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></td>
                 {showAssignedRange ? <td className="px-4 py-3.5 text-xs text-[var(--ink-soft)]">{row.assigned_from ? prettyDate(row.assigned_from) : "—"} – {row.assigned_to ? prettyDate(row.assigned_to) : "now"}</td> : null}
                 <td className="px-4 py-3.5 text-right font-semibold">{money(row.writer_payment_amount, currency)}</td>
@@ -129,7 +129,7 @@ function ProjectsList({ rows, currency, showAssignedRange }: { rows: WriterProfi
         {rows.map((row) => (
           <div key={row.id} className="p-4">
             <div className="flex items-center justify-between gap-3"><p className="truncate font-bold">{row.client_name}</p><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></div>
-            <p className="mt-0.5 truncate text-sm font-bold text-[var(--ink-soft)]">{shortTopic(row.topic)}</p>
+            <p className="mt-0.5 truncate font-bold">{shortTopic(row.topic)}</p>
             <p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p>
             <div className="mt-2 flex items-center justify-between text-sm"><span className="text-[var(--ink-soft)]">Paid {money(row.writer_paid_amount, currency)} of {money(row.writer_payment_amount, currency)}</span>{row.writer_due_amount !== null ? <span className="font-black">{money(row.writer_due_amount, currency)} due</span> : null}</div>
           </div>
