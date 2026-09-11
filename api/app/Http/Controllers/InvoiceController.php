@@ -167,9 +167,14 @@ class InvoiceController extends Controller
 
     public function destroy(Request $request, Business $business, Invoice $invoice): JsonResponse
     {
+        $membership = $this->membership($request);
         // Deleting a sale (as opposed to cancelling it) is an admin-only action,
-        // regardless of who created the invoice.
-        $this->requirePermission($request, 'sales.manage');
+        // regardless of who created the invoice — except in a thesis/installment
+        // business, which trusts the whole small team with each other's sales the
+        // same as it already does for expenses, projects and writers there.
+        $canManage = $membership->allows('sales.manage')
+            || ($business->isInstallment() && $membership->allows('sales.create'));
+        abort_unless($canManage, 403);
         abort_unless($invoice->business_id === $business->id, 404);
         $this->invoices->delete($business, $invoice, $request->user());
 

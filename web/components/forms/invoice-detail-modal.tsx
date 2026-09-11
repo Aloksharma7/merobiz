@@ -23,8 +23,10 @@ export function InvoiceDetailModal({ business, invoice, open, onClose }: { busin
   const canCreateOwnSales = business.permissions.includes("sales.create");
   const canManageThisSale = canManageAllSales || canCreateOwnSales;
   const canRecordPayment = business.permissions.includes("*") || business.permissions.includes("payments.manage") || business.permissions.includes("payments.record_own");
-  // Deleting a sale (unlike cancelling it) is admin-only, regardless of who created it.
-  const canDeleteSale = canManageAllSales;
+  // Deleting a sale (unlike cancelling it) is admin-only, regardless of who created
+  // it — except in a thesis/installment business, which trusts the whole small team
+  // with each other's sales the same as expenses, projects and writers there.
+  const canDeleteSale = canManageAllSales || (business.is_installment && canCreateOwnSales);
   const installmentsEnabled = Boolean(business.settings?.features?.installments);
 
   // The invoice prop is a static snapshot captured when a list row was clicked —
