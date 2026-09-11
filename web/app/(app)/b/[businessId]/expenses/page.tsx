@@ -116,9 +116,12 @@ function ExpensesPageContent() {
   const rows = query.data?.data ?? [];
   const summary = rows.reduce((acc, row) => ({ total: acc.total + row.amount, approved: acc.approved + (row.status === "approved" ? row.amount : 0), pending: acc.pending + (row.status === "pending" ? row.amount : 0) }), { total: 0, approved: 0, pending: 0 });
   const canApprove = can(business, "expenses.approve");
-  // Expenses approve immediately now, so there's no "still pending" window — the
+  // A thesis/installment business shares expenses company-wide (see the Expenses
+  // list above) — any staff who can log an expense can fix or delete any of them
+  // there, not just their own. A standard business keeps the tighter rule: the
   // person who added it can undo their own mistake the same day they made it.
-  const canDeleteExpense = (expense: Expense) => canManage || (can(business, "expenses.create") && expense.submitter?.id === user?.id && isToday(parseISO(expense.created_at)));
+  const canManageAnyExpense = canManage || (Boolean(business?.is_installment) && can(business, "expenses.create"));
+  const canDeleteExpense = (expense: Expense) => canManageAnyExpense || (can(business, "expenses.create") && expense.submitter?.id === user?.id && isToday(parseISO(expense.created_at)));
   const canEditExpense = canDeleteExpense;
   if (!business) return <PageLoading />;
   if (query.isError) return <ErrorState onRetry={() => void query.refetch()} />;

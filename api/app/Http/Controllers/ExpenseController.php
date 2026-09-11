@@ -127,7 +127,11 @@ class ExpenseController extends Controller
     public function update(UpdateExpenseRequest $request, Business $business, Expense $expense): JsonResponse
     {
         $membership = $this->membership($request);
-        $canManage = $membership->allows('expenses.manage');
+        // Same "whole small team" rule as index()'s visibility — a thesis/installment
+        // business lets any staff who can log expenses fix any of them, not just their
+        // own. A standard business keeps the tighter default below.
+        $canManage = $membership->allows('expenses.manage')
+            || ($business->isInstallment() && $membership->allows('expenses.create'));
         // Same window as destroy() — the person who submitted it can fix their own
         // mistake the same day, same as fixing a typo right after making it.
         $canEditOwnToday = $membership->allows('expenses.create')
@@ -202,7 +206,11 @@ class ExpenseController extends Controller
     public function destroy(Request $request, Business $business, Expense $expense): JsonResponse
     {
         $membership = $this->membership($request);
-        $canManage = $membership->allows('expenses.manage');
+        // Same "whole small team" rule as index()'s visibility — a thesis/installment
+        // business lets any staff who can log expenses delete any of them, not just
+        // their own. A standard business keeps the tighter default below.
+        $canManage = $membership->allows('expenses.manage')
+            || ($business->isInstallment() && $membership->allows('expenses.create'));
         // Expenses are approved immediately now, so there's no "still pending" window
         // to gate this on — instead, the person who submitted it can undo their own
         // mistake on the same day, same as fixing a typo right after making it.

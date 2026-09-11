@@ -9,7 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
-class ThesisBusinessExpenseVisibilityTest extends TestCase
+class ThesisBusinessExpenseManagementTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -78,5 +78,66 @@ class ThesisBusinessExpenseVisibilityTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.category', 'Travel');
+    }
+
+    public function test_an_employee_can_edit_and_delete_a_coworkers_expense_in_an_installment_business(): void
+    {
+        $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-tbev3@example.test', 'password' => 'password']);
+        $employeeOne = User::query()->create(['name' => 'Employee One', 'email' => 'employee-tbev3a@example.test', 'password' => 'password']);
+        $employeeTwo = User::query()->create(['name' => 'Employee Two', 'email' => 'employee-tbev3b@example.test', 'password' => 'password']);
+        $business = Business::query()->create([
+            'owner_id' => $owner->id, 'name' => 'Thesis Expense Co Two', 'slug' => 'thesis-expense-co-two-'.uniqid(), 'code' => 'TE'.rand(1000, 9999),
+            'business_type' => 'service', 'category' => 'installment', 'currency' => 'NPR', 'invoice_prefix' => 'TEC',
+            'default_tax_rate' => 0, 'status' => 'active',
+        ]);
+        $business->memberships()->createMany([
+            ['user_id' => $owner->id, 'role' => BusinessRole::Owner, 'full_control' => true, 'active' => true],
+            ['user_id' => $employeeOne->id, 'role' => BusinessRole::Employee, 'active' => true],
+            ['user_id' => $employeeTwo->id, 'role' => BusinessRole::Employee, 'active' => true],
+        ]);
+
+        Sanctum::actingAs($employeeOne);
+        $expense = $this->postJson("/api/businesses/{$business->id}/expenses", [
+            'category' => 'Printing', 'expense_date' => today()->toDateString(), 'amount' => 500, 'payment_method' => 'cash',
+        ])->assertCreated()->json('expense');
+
+        // Employee Two never submitted this expense, but a thesis business trusts
+        // the whole small team to manage each other's entries, same as an admin.
+        Sanctum::actingAs($employeeTwo);
+        $this->patchJson("/api/businesses/{$business->id}/expenses/{$expense['id']}", [
+            'category' => 'Printing', 'expense_date' => today()->toDateString(), 'amount' => 650, 'payment_method' => 'cash',
+        ])->assertOk()->assertJsonPath('expense.amount', 650);
+
+        $this->deleteJson("/api/businesses/{$business->id}/expenses/{$expense['id']}")
+            ->assertOk()
+            ->assertJsonPath('message', 'Expense deleted.');
+    }
+
+    public function test_an_employee_cannot_edit_or_delete_a_coworkers_expense_in_a_standard_business(): void
+    {
+        $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-tbev4@example.test', 'password' => 'password']);
+        $employeeOne = User::query()->create(['name' => 'Employee One', 'email' => 'employee-tbev4a@example.test', 'password' => 'password']);
+        $employeeTwo = User::query()->create(['name' => 'Employee Two', 'email' => 'employee-tbev4b@example.test', 'password' => 'password']);
+        $business = Business::query()->create([
+            'owner_id' => $owner->id, 'name' => 'Standard Expense Co Two', 'slug' => 'standard-expense-co-two-'.uniqid(), 'code' => 'SE'.rand(1000, 9999),
+            'business_type' => 'service', 'category' => 'standard', 'currency' => 'NPR', 'invoice_prefix' => 'SEC',
+            'default_tax_rate' => 0, 'status' => 'active',
+        ]);
+        $business->memberships()->createMany([
+            ['user_id' => $owner->id, 'role' => BusinessRole::Owner, 'full_control' => true, 'active' => true],
+            ['user_id' => $employeeOne->id, 'role' => BusinessRole::Employee, 'active' => true],
+            ['user_id' => $employeeTwo->id, 'role' => BusinessRole::Employee, 'active' => true],
+        ]);
+
+        Sanctum::actingAs($employeeOne);
+        $expense = $this->postJson("/api/businesses/{$business->id}/expenses", [
+            'category' => 'Office supplies', 'expense_date' => today()->toDateString(), 'amount' => 500, 'payment_method' => 'cash',
+        ])->assertCreated()->json('expense');
+
+        Sanctum::actingAs($employeeTwo);
+        $this->patchJson("/api/businesses/{$business->id}/expenses/{$expense['id']}", [
+            'category' => 'Office supplies', 'expense_date' => today()->toDateString(), 'amount' => 650, 'payment_method' => 'cash',
+        ])->assertForbidden();
+        $this->deleteJson("/api/businesses/{$business->id}/expenses/{$expense['id']}")->assertForbidden();
     }
 }
