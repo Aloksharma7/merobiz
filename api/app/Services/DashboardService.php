@@ -235,8 +235,10 @@ class DashboardService
 
         $today = CarbonImmutable::now();
         $monthMetrics = $this->metrics($business, $today->startOfMonth(), $today, $creator);
+        $todayMetrics = $this->metrics($business, $today, $today, $creator);
         if (! $canViewFinancials) {
             $monthMetrics = $this->employeeSafeMetrics($monthMetrics);
+            $todayMetrics = $this->employeeSafeMetrics($todayMetrics);
         }
 
         return [
@@ -259,6 +261,7 @@ class DashboardService
             ],
             'owners' => $this->activeOwners($business, $canViewFinancials),
             'month_to_date' => ['sales' => $monthMetrics['net_sales'], 'profit' => $monthMetrics['net_profit']],
+            'today' => ['sales' => $todayMetrics['net_sales'], 'profit' => $todayMetrics['net_profit']],
             'profit_collected_this_month' => $canViewFinancials && $membership->role === BusinessRole::Owner
                 ? $this->collectedThisMonth($user->id, $business->id)
                 : 0.0,

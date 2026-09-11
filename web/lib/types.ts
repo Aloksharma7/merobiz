@@ -682,6 +682,7 @@ export type BusinessDashboard = {
   };
   owners: Array<{ user_id: number; name: string; initials: string; title?: string | null; ownership_percent: number | null; profit_share_percent: number | null }>;
   month_to_date: { sales: number; profit: number };
+  today: { sales: number; profit: number };
   profit_collected_this_month: number;
   permissions: Record<string, boolean>;
   summary: MetricSummary;

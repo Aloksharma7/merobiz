@@ -73,7 +73,7 @@ export default function BusinessDashboardPage() {
         actions={data.permissions.can_manage_sales ? <LinkButton href={`/b/${businessId}/sales?new=1`} leftIcon={<Plus size={17} />}>New sale</LinkButton> : undefined}
       />
 
-      <section className={cn("grid gap-4 sm:grid-cols-2", owner ? "xl:grid-cols-3" : "xl:grid-cols-2")}>
+      <section className={cn("grid gap-4 sm:grid-cols-2", owner ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
         <MyProfileCard
           name={user?.name ?? ""}
           email={user?.email}
@@ -86,6 +86,7 @@ export default function BusinessDashboardPage() {
           onLogProfit={owner ? () => setWithdrawalOpen(true) : undefined}
         />
         {financial && data.business.is_installment ? null : <MetricCard emphasis={!owner} label={financial ? "This month's expected profit" : "This month's sales"} value={financial ? data.month_to_date.profit : data.month_to_date.sales} currency={currency} icon={CalendarClock} hint="Month to date" />}
+        {financial && data.business.is_installment ? null : <MetricCard emphasis={!owner} label={financial ? "Today's profit" : "Today's sales"} value={financial ? data.today.profit : data.today.sales} currency={currency} icon={TrendingUp} hint="So far today" />}
         {owner ? <MetricCard emphasis label="Profit taken" value={data.profit_collected_this_month} currency={currency} icon={Wallet2} hint="Logged this month" /> : null}
       </section>
       <ProfitWithdrawalFormModal open={withdrawalOpen} onClose={() => setWithdrawalOpen(false)} businesses={[{ id: Number(businessId), name: business.name }]} />
