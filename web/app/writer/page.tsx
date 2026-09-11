@@ -106,6 +106,7 @@ export default function WriterDashboardPage() {
 }
 
 function ProjectsList({ rows, currency, showAssignedRange }: { rows: WriterProfile["projects"]; currency: string; showAssignedRange?: boolean }) {
+  const router = useRouter();
   return (
     <>
       <div className="hidden overflow-x-auto md:block">
@@ -113,7 +114,7 @@ function ProjectsList({ rows, currency, showAssignedRange }: { rows: WriterProfi
           <thead><tr className="bg-[var(--surface-soft)] text-[10px] uppercase tracking-[0.11em] text-[var(--ink-soft)]"><th className="px-5 py-3 font-bold">Client</th><th className="px-4 py-3 font-bold">Status</th>{showAssignedRange ? <th className="px-4 py-3 font-bold">Assigned</th> : null}<th className="px-4 py-3 text-right font-bold">Total amount to you</th><th className="px-4 py-3 text-right font-bold">Paid</th>{!showAssignedRange ? <th className="px-5 py-3 text-right font-bold">Still due</th> : null}</tr></thead>
           <tbody className="divide-y divide-[var(--line)]">
             {rows.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className="cursor-pointer transition hover:bg-[var(--surface-soft)]" onClick={() => router.push(`/writer/projects/${row.id}`)}>
                 <td className="px-5 py-3.5"><p className="block max-w-[220px] truncate font-bold">{row.client_name}</p><p className="mt-0.5 max-w-[220px] truncate font-bold">{shortTopic(row.topic)}</p><p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p></td>
                 <td className="px-4 py-3.5"><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></td>
                 {showAssignedRange ? <td className="px-4 py-3.5 text-xs text-[var(--ink-soft)]">{row.assigned_from ? prettyDate(row.assigned_from) : "—"} – {row.assigned_to ? prettyDate(row.assigned_to) : "now"}</td> : null}
@@ -127,7 +128,7 @@ function ProjectsList({ rows, currency, showAssignedRange }: { rows: WriterProfi
       </div>
       <div className="divide-y divide-[var(--line)] md:hidden">
         {rows.map((row) => (
-          <div key={row.id} className="p-4">
+          <div key={row.id} className="cursor-pointer p-4" onClick={() => router.push(`/writer/projects/${row.id}`)}>
             <div className="flex items-center justify-between gap-3"><p className="truncate font-bold">{row.client_name}</p><Badge tone={statusTone(row.work_status)}>{row.work_status}</Badge></div>
             <p className="mt-0.5 truncate font-bold">{shortTopic(row.topic)}</p>
             <p className="mt-0.5 text-xs text-[var(--ink-soft)]">{row.course} · {row.work}</p>

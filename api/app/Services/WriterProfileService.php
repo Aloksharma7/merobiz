@@ -102,4 +102,46 @@ class WriterProfileService
             })->values(),
         ];
     }
+
+    /**
+     * The writer's own view of a single file — full topic and every non-money
+     * detail, plus what the file pays *them* specifically (that's their own
+     * earnings, not a business secret). It deliberately omits everything about
+     * what the client was charged or has paid: deal amount, collected/due
+     * amounts, refunds and profit are the business's figures, not the writer's.
+     *
+     * @return array<string, mixed>
+     */
+    public function projectDetail(Writer $writer, Project $project): array
+    {
+        $assignments = $project->writerAssignments()
+            ->where('writer_id', $writer->id)
+            ->orderByDesc('assigned_from')
+            ->get();
+        $currentAssignment = $assignments->first(fn ($assignment) => $assignment->assigned_to === null);
+        $latestAssignment = $currentAssignment ?? $assignments->first();
+
+        $paidByThisWriter = (float) $project->writerPayments()->where('writer_id', $writer->id)->sum('amount');
+        $paidByAnyone = (float) $project->writerPayments()->sum('amount');
+
+        return [
+            'id' => $project->id,
+            'currency' => $writer->business->currency,
+            'client_name' => $project->client_name,
+            'client_phone' => $project->client_phone,
+            'client_email' => $project->client_email,
+            'started_on' => $project->started_on?->toDateString(),
+            'topic' => $project->topic,
+            'course' => $project->course,
+            'work' => $project->work,
+            'work_status' => $project->work_status->value,
+            'deadline' => $project->deadline?->toDateString(),
+            'is_current' => $currentAssignment !== null,
+            'assigned_from' => $latestAssignment?->assigned_from->toDateString(),
+            'assigned_to' => $latestAssignment?->assigned_to?->toDateString(),
+            'writer_payment_amount' => (float) $project->writer_payment_amount,
+            'writer_paid_amount' => round($paidByThisWriter, 2),
+            'writer_due_amount' => $currentAssignment ? round(max(0.0, (float) $project->writer_payment_amount - $paidByAnyone), 2) : null,
+        ];
+    }
 }

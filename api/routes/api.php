@@ -53,6 +53,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/businesses', [BusinessController::class, 'store']);
 
     Route::get('/writer/dashboard', [WriterSelfController::class, 'dashboard']);
+    Route::get('/writer/projects/{project}', [WriterSelfController::class, 'project']);
 
     Route::prefix('personal')->group(function (): void {
         Route::get('/overview', PersonalOverviewController::class);

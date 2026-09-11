@@ -243,6 +243,26 @@ export type WriterPaymentRow = {
   notes?: string | null;
 };
 
+export type WriterProjectDetail = {
+  id: number;
+  currency: string;
+  client_name: string;
+  client_phone?: string | null;
+  client_email?: string | null;
+  started_on?: string | null;
+  topic: string;
+  course: string;
+  work: string;
+  work_status: ProjectWorkStatus;
+  deadline?: string | null;
+  is_current: boolean;
+  assigned_from?: string | null;
+  assigned_to?: string | null;
+  writer_payment_amount: number;
+  writer_paid_amount: number;
+  writer_due_amount: number | null;
+};
+
 export type WriterProfile = {
   writer: Writer;
   business: { name: string; currency: string };
