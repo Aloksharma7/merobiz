@@ -189,6 +189,12 @@ class TeamController extends Controller
             'full_control' => ['sometimes', 'boolean'],
             'title' => ['nullable', 'string', 'max:120'],
             'commission_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            // Defaults to today below when omitted, but a fixed-salary hire who
+            // actually started earlier (registered in the system late) needs this
+            // backdated — otherwise monthsElapsed() only counts from today, and a
+            // salary payment covering the months they actually worked reads as an
+            // overpayment against accrued pay that hasn't "started" yet.
+            'joined_at' => ['sometimes', 'date', 'before_or_equal:today'],
             'pay_type' => ['sometimes', Rule::enum(PayType::class)],
             'salary_amount' => ['sometimes', 'numeric', 'min:0'],
             'salary_visible_to_staff' => ['sometimes', 'boolean'],
@@ -255,7 +261,7 @@ class TeamController extends Controller
                 'title' => $data['title'] ?? null,
                 'commission_rate' => $data['commission_rate'] ?? 0,
                 'active' => true,
-                'joined_at' => now()->toDateString(),
+                'joined_at' => $data['joined_at'] ?? now()->toDateString(),
                 'pay_type' => $data['pay_type'] ?? PayType::FixedSalary->value,
                 'salary_amount' => $data['salary_amount'] ?? 0,
                 'salary_visible_to_staff' => $data['salary_visible_to_staff'] ?? false,
@@ -293,6 +299,7 @@ class TeamController extends Controller
                 'title' => $membership->title,
                 'commission_rate' => (float) $membership->commission_rate,
                 'active' => $membership->active,
+                'joined_at' => $membership->joined_at?->toDateString(),
             ],
         ], 201);
     }
@@ -308,6 +315,10 @@ class TeamController extends Controller
             'title' => ['nullable', 'string', 'max:120'],
             'commission_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'active' => ['sometimes', 'boolean'],
+            // Correcting this after the fact is exactly how a late-registered but
+            // actually-longer-tenured employee's accrued fixed salary gets fixed —
+            // see the same note in store() above.
+            'joined_at' => ['sometimes', 'date', 'before_or_equal:today'],
             'pay_type' => ['sometimes', Rule::enum(PayType::class)],
             'salary_amount' => ['sometimes', 'numeric', 'min:0'],
             'salary_visible_to_staff' => ['sometimes', 'boolean'],
@@ -400,6 +411,7 @@ class TeamController extends Controller
                 'title' => $membership->title,
                 'commission_rate' => (float) $membership->commission_rate,
                 'active' => $membership->active,
+                'joined_at' => $membership->joined_at?->toDateString(),
                 'pay_type' => $membership->pay_type->value,
                 'salary_amount' => (float) $membership->salary_amount,
                 'salary_visible_to_staff' => $membership->salary_visible_to_staff,

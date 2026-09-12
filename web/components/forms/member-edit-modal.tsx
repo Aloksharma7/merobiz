@@ -5,12 +5,12 @@ import { FieldShell, Input, Select } from "@/components/ui/fields";
 import { Modal } from "@/components/ui/modal";
 import { api, apiError, fieldErrors } from "@/lib/api";
 import type { ApiMessage, BusinessRole, Member, PayType } from "@/lib/types";
-import { humanize } from "@/lib/utils";
+import { humanize, today } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
-const blank = { role: "employee" as BusinessRole, full_control: false, title: "", active: true, pay_type: "fixed_salary" as PayType, salary_amount: "0", salary_visible_to_staff: false, ownership_percent: "0", profit_share_percent: "0" };
+const blank = { role: "employee" as BusinessRole, full_control: false, title: "", joined_at: today(), active: true, pay_type: "fixed_salary" as PayType, salary_amount: "0", salary_visible_to_staff: false, ownership_percent: "0", profit_share_percent: "0" };
 
 export function MemberEditModal({ businessId, actorRole, actorFullControl, actorIsFounder, member, open, onClose }: { businessId: string | number; actorRole: BusinessRole; actorFullControl: boolean; actorIsFounder: boolean; member: Member | null; open: boolean; onClose: () => void }) {
   const roles: BusinessRole[] = actorFullControl ? ["employee", "admin", "owner"] : actorRole === "owner" || actorRole === "admin" ? ["employee", "admin"] : ["employee"];
@@ -28,6 +28,7 @@ export function MemberEditModal({ businessId, actorRole, actorFullControl, actor
         role: member.role,
         full_control: member.full_control,
         title: member.title ?? "",
+        joined_at: member.joined_at ?? today(),
         active: member.active,
         pay_type: member.pay_type === "commission" || (member.role === "owner" && member.pay_type === "profit_share") ? "fixed_salary" : member.pay_type,
         salary_amount: String(member.salary_amount ?? 0),
@@ -83,6 +84,7 @@ export function MemberEditModal({ businessId, actorRole, actorFullControl, actor
         {lockedByFounderProtection ? <p className="rounded-2xl bg-[var(--surface-soft)] p-3 text-xs leading-5 text-[var(--ink-soft)] sm:col-span-2">Only {member.name} can change their own role, active status or full control.</p> : null}
         <FieldShell label="Role" htmlFor="edit-member-role" error={errors.role?.[0]} required><Select id="edit-member-role" value={form.role} disabled={lockedByFounderProtection} onChange={(event) => { const role = event.target.value as BusinessRole; setForm((current) => ({ ...current, role, pay_type: role === "owner" ? "fixed_salary" : current.pay_type })); }}>{roles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</Select></FieldShell>
         <FieldShell label="Job title" htmlFor="edit-member-title" error={errors.title?.[0]}><Input id="edit-member-title" value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="e.g. Sales Executive" /></FieldShell>
+        <FieldShell label="Joined on" htmlFor="edit-member-joined-at" error={errors.joined_at?.[0]} hint="Backdate this if they were registered late but actually started earlier — fixed-salary accrual counts from this date"><Input id="edit-member-joined-at" type="date" max={today()} value={form.joined_at} onChange={(event) => update("joined_at", event.target.value)} /></FieldShell>
         <FieldShell label="Pay type" htmlFor="edit-member-pay-type" error={errors.pay_type?.[0]} hint={form.role === "owner" ? "Owners use Ownership + \"Log profit taken\" for their own profit instead" : undefined}>
           <Select id="edit-member-pay-type" value={form.pay_type} onChange={(event) => update("pay_type", event.target.value as PayType)}>
             <option value="fixed_salary">Fixed salary</option>
