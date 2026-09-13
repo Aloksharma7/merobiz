@@ -634,6 +634,7 @@ export type PortfolioDashboard = {
     name: string;
     code: string;
     business_type: string;
+    is_installment: boolean;
     currency: string;
     status: string;
     my_role: BusinessRole;

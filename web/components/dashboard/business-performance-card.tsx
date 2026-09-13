@@ -1,11 +1,11 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { humanize, money } from "@/lib/utils";
+import { cn, humanize, money } from "@/lib/utils";
 import { ArrowRight, HandCoins, Wallet2 } from "lucide-react";
 import Link from "next/link";
 
 export function BusinessPerformanceCard({ row }: { row: {
-  id: number; name: string; code: string; currency: string; business_type: string; my_role: string;
+  id: number; name: string; code: string; currency: string; business_type: string; my_role: string; is_installment: boolean;
   ownership_percent: number; profit_share_percent: number; can_view_financials: boolean;
   metrics: { net_sales: number; net_profit: number; attributable_profit?: number; receivables: number };
   collected_this_month: number;
@@ -26,9 +26,13 @@ export function BusinessPerformanceCard({ row }: { row: {
             </div>
             <ArrowRight size={18} className="mt-2 shrink-0 text-[var(--ink-soft)] transition group-hover:translate-x-1 group-hover:text-[var(--brand)]" />
           </div>
-          <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className={cn("mt-6 grid gap-3", row.is_installment ? "grid-cols-1" : "grid-cols-2")}>
             <div className="rounded-2xl bg-[var(--surface-soft)] p-3.5"><p className="text-[10px] font-bold uppercase tracking-[0.11em] text-[var(--ink-soft)]">Net sales</p><p className="mt-1 truncate text-lg font-black tracking-[-0.03em]">{money(row.metrics.net_sales, row.currency)}</p></div>
-            <div className="rounded-2xl bg-[var(--brand-deep)] p-3.5 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.11em] text-white/50">{owner ? "Your expected profit" : "Expected net profit"}</p><p className="mt-1 truncate text-lg font-black tracking-[-0.03em]">{money(owner ? row.metrics.attributable_profit ?? 0 : row.metrics.net_profit, row.currency)}</p></div>
+            {/* A thesis/installment business's profit only ever exists once a project
+                is manually approved — never an automatic "expected" estimate, so it
+                has no place in this at-a-glance tile (see the same reasoning on the
+                single-business dashboard). */}
+            {row.is_installment ? null : <div className="rounded-2xl bg-[var(--brand-deep)] p-3.5 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.11em] text-white/50">{owner ? "Your expected profit" : "Expected net profit"}</p><p className="mt-1 truncate text-lg font-black tracking-[-0.03em]">{money(owner ? row.metrics.attributable_profit ?? 0 : row.metrics.net_profit, row.currency)}</p></div>}
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line)] pt-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--ink-soft)]">

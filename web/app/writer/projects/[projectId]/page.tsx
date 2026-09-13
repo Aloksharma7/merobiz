@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import type { WriterProjectDetail } from "@/lib/types";
 import { money, prettyDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -66,6 +66,13 @@ export default function WriterProjectDetailPage() {
           <Stat label="Paid to you" value={money(project.writer_paid_amount)} />
           {project.is_current ? <Stat label="Still due to you" value={money(project.writer_due_amount ?? 0)} emphasis={(project.writer_due_amount ?? 0) > 0} /> : null}
         </section>
+
+        {project.is_current && (project.writer_due_amount ?? 0) > 0 ? (
+          <div role="status" className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            <TriangleAlert size={17} className="mt-0.5 shrink-0" />
+            <p><strong>This does not mean you own this amount.</strong> You need to complete the file, and your file should be approved, to get payment.</p>
+          </div>
+        ) : null}
 
         {project.assigned_from ? (
           <p className="text-xs text-[var(--ink-soft)]">

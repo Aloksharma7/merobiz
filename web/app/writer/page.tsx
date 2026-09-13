@@ -14,7 +14,7 @@ import { money, prettyDate, shortTopic } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Briefcase, CircleDollarSign, FolderKanban, LogOut, Mail, Phone, Wallet2 } from "lucide-react";
+import { Briefcase, CircleDollarSign, FolderKanban, LogOut, Mail, Phone, TriangleAlert, Wallet2 } from "lucide-react";
 
 export default function WriterDashboardPage() {
   const { user, isLoading: authLoading, logout } = useAuth();
@@ -68,6 +68,13 @@ export default function WriterDashboardPage() {
           <Stat label="Total paid (all time)" value={money(stats.total_paid, currency)} icon={Wallet2} />
           <Stat label="Still due to you" value={money(stats.total_due, currency)} icon={CircleDollarSign} emphasis={stats.total_due > 0} />
         </section>
+
+        {stats.total_due > 0 ? (
+          <div role="status" className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            <TriangleAlert size={17} className="mt-0.5 shrink-0" />
+            <p><strong>This does not mean you own this amount.</strong> You need to complete the file, and your file should be approved, to get payment.</p>
+          </div>
+        ) : null}
 
         <Card className="overflow-hidden">
           <CardHeader

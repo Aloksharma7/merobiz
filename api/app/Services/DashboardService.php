@@ -74,9 +74,22 @@ class DashboardService
             $availableBalance = ($canViewFinancials || ! $business->isInstallment()) ? $this->availableBalance($business) : $this->emptyAvailableBalance();
             $totalAvailableBalance += $availableBalance['available_balance'];
             foreach (array_keys($this->emptyMetrics()) as $key) {
+                // A thesis/installment business's "profit" only ever exists once a
+                // project's profit is manually approved — it's never an automatic
+                // sales-minus-cost figure the way it is elsewhere. That's exactly why
+                // the single-business dashboard never shows an "expected profit" card
+                // for one: combining it into this portfolio-wide total would blend a
+                // manually-approved number into an otherwise-automatic estimate and
+                // call the result "expected", which it isn't. Net sales, receivables,
+                // expenses and every other non-profit figure still combine normally.
+                if ($business->isInstallment() && in_array($key, ['net_profit', 'gross_profit', 'project_profit'], true)) {
+                    continue;
+                }
                 $summary[$key] += $metrics[$key];
             }
-            $summary['attributable_profit'] += $attributable;
+            if (! $business->isInstallment()) {
+                $summary['attributable_profit'] += $attributable;
+            }
 
             $businessRows[] = [
                 'id' => $business->id,
@@ -173,6 +186,12 @@ class DashboardService
             $creator = $canViewAllSales ? null : $user;
             $metrics = $this->metrics($business, $start, $end, $creator);
             $sales += $metrics['net_sales'];
+
+            // Same thesis/installment exemption as portfolio() above — never blend a
+            // manually-approved project profit into this "expected" combined figure.
+            if ($business->isInstallment()) {
+                continue;
+            }
 
             if ($mode === 'owner') {
                 $profit += $canViewFinancials ? $this->attributableProfit($user, $business, $start, $end, netWithdrawals: true) : 0.0;
