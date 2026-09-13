@@ -25,7 +25,7 @@ class WriterProjectDetailTest extends TestCase
         return $business;
     }
 
-    public function test_a_writer_sees_the_full_topic_and_their_own_pay_but_no_client_money_figures(): void
+    public function test_a_writer_sees_the_full_topic_and_their_own_pay_but_no_client_money_or_contact_info(): void
     {
         $owner = User::query()->create(['name' => 'Owner', 'email' => 'owner-wpd1@example.test', 'password' => 'password']);
         $business = $this->installmentBusiness($owner);
@@ -37,7 +37,7 @@ class WriterProjectDetailTest extends TestCase
 
         $longTopic = trim(str_repeat('Impact of remote work on organisational culture ', 3));
         $project = $this->postJson("/api/businesses/{$business->id}/projects", [
-            'client_name' => 'Client A', 'client_phone' => '9800000000', 'topic' => $longTopic, 'course' => 'MBA', 'work' => 'Thesis',
+            'client_name' => 'Client A', 'client_phone' => '9800000000', 'client_email' => 'client-a@example.test', 'topic' => $longTopic, 'course' => 'MBA', 'work' => 'Thesis',
             'deal_amount' => 20000, 'writer_payment_amount' => 6000, 'writer_id' => $writer['id'],
         ])->assertCreated()->json('project');
 
@@ -52,11 +52,14 @@ class WriterProjectDetailTest extends TestCase
 
         $this->assertSame($longTopic, $response['topic']);
         $this->assertSame('Client A', $response['client_name']);
-        $this->assertSame('9800000000', $response['client_phone']);
         $this->assertTrue($response['is_current']);
         $this->assertEquals(6000.0, $response['writer_payment_amount']);
         $this->assertEquals(2000.0, $response['writer_paid_amount']);
         $this->assertEquals(4000.0, $response['writer_due_amount']);
+
+        // Never the client's own direct contact details.
+        $this->assertArrayNotHasKey('client_phone', $response);
+        $this->assertArrayNotHasKey('client_email', $response);
 
         // Never the business's own money figures for this file.
         $this->assertArrayNotHasKey('deal_amount', $response);

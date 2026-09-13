@@ -247,8 +247,6 @@ export type WriterProjectDetail = {
   id: number;
   currency: string;
   client_name: string;
-  client_phone?: string | null;
-  client_email?: string | null;
   started_on?: string | null;
   topic: string;
   course: string;

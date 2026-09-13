@@ -109,6 +109,9 @@ class WriterProfileService
      * earnings, not a business secret). It deliberately omits everything about
      * what the client was charged or has paid: deal amount, collected/due
      * amounts, refunds and profit are the business's figures, not the writer's.
+     * It also omits the client's own contact details (phone/email) — a writer
+     * has no legitimate reason to contact the client directly; that stays
+     * between the client and whoever on staff manages the file.
      *
      * @return array<string, mixed>
      */
@@ -128,8 +131,6 @@ class WriterProfileService
             'id' => $project->id,
             'currency' => $writer->business->currency,
             'client_name' => $project->client_name,
-            'client_phone' => $project->client_phone,
-            'client_email' => $project->client_email,
             'started_on' => $project->started_on?->toDateString(),
             'topic' => $project->topic,
             'course' => $project->course,

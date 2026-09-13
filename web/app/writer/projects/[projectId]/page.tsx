@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import type { WriterProjectDetail } from "@/lib/types";
 import { money, prettyDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Mail, Phone } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -54,12 +54,6 @@ export default function WriterProjectDetailPage() {
             <Badge tone={project.is_current ? "success" : "neutral"}>{project.is_current ? "Currently assigned to you" : "Previously assigned to you"}</Badge>
             {project.deadline ? <span className="text-xs font-semibold text-[var(--ink-soft)]">Deadline {prettyDate(project.deadline)}</span> : null}
           </div>
-          {(project.client_phone || project.client_email) ? (
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--ink-soft)]">
-              {project.client_phone ? <span className="flex items-center gap-1.5"><Phone size={13} />{project.client_phone}</span> : null}
-              {project.client_email ? <span className="flex items-center gap-1.5"><Mail size={13} />{project.client_email}</span> : null}
-            </div>
-          ) : null}
         </div>
 
         <Card className="overflow-hidden">
